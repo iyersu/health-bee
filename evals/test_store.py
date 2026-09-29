@@ -8,9 +8,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
+
+from journal import store
 
 from journal.store import (
-    SchemaError, StorageError, add_entry, get_entries, get_entry, init_db,
+    SCHEMA_VERSION, EntryNotFoundError, update_entry, SchemaError, StorageError, add_entry, get_entries, get_entry, init_db,
 )
 
 
@@ -104,7 +107,7 @@ class StoreTests(unittest.TestCase):
         self.assertIsNotNone(get_entry(self.path, entry_id))
         connection = sqlite3.connect(self.path)
         try:
-            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 1)
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
         finally:
             connection.close()
 
@@ -122,7 +125,7 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(other.read_bytes(), before)
 
     def test_future_version_and_changed_columns_are_rejected(self):
-        for sql in ("PRAGMA user_version = 2", "ALTER TABLE entries ADD COLUMN unknown TEXT"):
+        for sql in ("PRAGMA user_version = 99", "ALTER TABLE entries ADD COLUMN unknown TEXT"):
             with self.subTest(sql=sql):
                 path = Path(self.temp.name) / ("future.db" if "PRAGMA" in sql else "changed.db")
                 init_db(path)
@@ -159,6 +162,198 @@ class StoreTests(unittest.TestCase):
         with self.assertRaises(StorageError):
             self.add("Must not appear as saved")
         self.assertEqual([r["raw_text"] for r in get_entries(self.path)], ["Existing synthetic entry"])
+
+
+    def test_health_fields_and_repeated_symptoms_round_trip(self):
+        entry_id = self.add(sleep_hours=7.5, energy=0, bleeding="none", observations=[
+            {"symptom": "headache", "severity": 3, "notes": "Synthetic morning"},
+            {"symptom": "headache", "severity": 0},
+            {"symptom": "cramps"},
+        ])
+        row = get_entry(self.path, entry_id)
+        self.assertEqual((row["sleep_hours"], row["energy"], row["bleeding"]), (7.5, 0, "none"))
+        self.assertEqual([o["severity"] for o in row["observations"]], [3, 0, None])
+        self.assertTrue(all(o["source"] == "user" for o in row["observations"]))
+        self.assertEqual(get_entries(self.path)[0], row)
+
+    def test_unrecorded_health_fields_remain_unknown(self):
+        row = get_entry(self.path, self.add())
+        for key in ("sleep_hours", "energy", "bleeding"):
+            self.assertIsNone(row[key])
+        self.assertEqual(row["observations"], [])
+        self.assertEqual(row["revision"], 1)
+
+    def test_partial_edit_preserves_other_fields_and_identity(self):
+        entry_id = self.add(mood="calm", sleep_hours=8, observations=[{"symptom": "cramps"}])
+        before = get_entry(self.path, entry_id)
+        row = update_entry(self.path, entry_id, raw_text="  Synthetic corrected text\n")
+        self.assertEqual(row["raw_text"], "  Synthetic corrected text\n")
+        for key in ("id", "created_at", "occurred_at", "mood", "sleep_hours", "observations"):
+            self.assertEqual(row[key], before[key])
+        self.assertGreater(row["updated_at"], before["updated_at"])
+        self.assertEqual(row["revision"], 2)
+        self.assertEqual(get_entry(self.path, entry_id), row)
+
+    def test_edit_and_observations_persist_in_new_process(self):
+        entry_id = self.add()
+        edited = update_entry(self.path, entry_id, mood="tired", observations=[
+            {"symptom": "Synthetic headache", "severity": 5}])
+        code = ("import json,sys; from journal.store import get_entry; "
+                "print(json.dumps(get_entry(sys.argv[1], int(sys.argv[2]))))")
+        result = subprocess.run([sys.executable, "-c", code, str(self.path), str(entry_id)],
+                                cwd=Path(__file__).resolve().parents[1], capture_output=True,
+                                text=True, check=True)
+        self.assertEqual(json.loads(result.stdout), edited)
+
+    def test_clear_nullable_fields_and_replace_observations(self):
+        entry_id = self.add(mood="calm", meds="Synthetic medicine", food="soup", tags="test",
+                            sleep_hours=8, energy=4, bleeding="light",
+                            observations=[{"symptom": "headache"}, {"symptom": "cramps"}])
+        replaced = update_entry(self.path, entry_id, observations=[{"symptom": "fatigue"}])
+        self.assertEqual([o["symptom"] for o in replaced["observations"]], ["fatigue"])
+        fields = {key: None for key in ("mood", "meds", "food", "tags", "sleep_hours", "energy", "bleeding")}
+        cleared = update_entry(self.path, entry_id, observations=[], **fields)
+        self.assertEqual(cleared["observations"], [])
+        for key in fields:
+            self.assertIsNone(cleared[key])
+        self.assertEqual(cleared["raw_text"], "Synthetic entry")
+
+    def test_noop_edit_keeps_revision_and_timestamp(self):
+        entry_id = self.add(observations=[{"symptom": "headache"}])
+        before = get_entry(self.path, entry_id)
+        self.assertEqual(update_entry(self.path, entry_id), before)
+        self.assertEqual(update_entry(self.path, entry_id, raw_text=before["raw_text"],
+                                      observations=[{"symptom": "headache"}]), before)
+
+    def test_occurrence_edit_updates_date_filters(self):
+        entry_id = self.add()
+        row = update_entry(self.path, entry_id,
+                           occurred_at=datetime.fromisoformat("2026-09-30T23:30:00-05:00"))
+        self.assertEqual(row["occurrence_date"], "2026-09-30")
+        self.assertEqual(row["occurred_at_utc"], "2026-10-01T04:30:00.000000+00:00")
+        self.assertEqual(get_entries(self.path, until="2026-09-30"), [])
+        self.assertEqual(get_entries(self.path, since="2026-09-30")[0]["id"], entry_id)
+
+    def test_invalid_health_values_never_partially_save(self):
+        entry_id = self.add(mood="calm", observations=[{"symptom": "headache"}])
+        before = get_entry(self.path, entry_id)
+        bad_values = [
+            {"sleep_hours": -1}, {"sleep_hours": 25}, {"sleep_hours": True},
+            {"sleep_hours": 10 ** 1000}, {"sleep_hours": float("nan")}, {"sleep_hours": float("inf")},
+            {"energy": -1}, {"energy": 11}, {"energy": True}, {"energy": 2.5},
+            {"bleeding": "unknown-value"}, {"bleeding": []},
+            {"observations": "headache"}, {"observations": [None]},
+            {"observations": [{}]}, {"observations": [{"symptom": "  "}]},
+            {"observations": [{"symptom": "headache", "severity": 11}]},
+            {"observations": [{"symptom": "headache", "severity": True}]},
+            {"observations": [{"symptom": "headache", "notes": 1}]},
+            {"observations": [{"symptom": "headache", "source": "ai"}]},
+        ]
+        for fields in bad_values:
+            with self.subTest(fields=fields):
+                with self.assertRaises(ValueError):
+                    update_entry(self.path, entry_id, mood="changed", **fields)
+                self.assertEqual(get_entry(self.path, entry_id), before)
+                with self.assertRaises(ValueError):
+                    self.add(**fields)
+                self.assertEqual(len(get_entries(self.path)), 1)
+
+    def test_edit_rejects_missing_ids_and_internal_fields(self):
+        with self.assertRaises(EntryNotFoundError):
+            update_entry(self.path, 999, mood="calm")
+        for entry_id in (0, -1, True, "1"):
+            with self.assertRaises(ValueError):
+                update_entry(self.path, entry_id, mood="calm")
+        entry_id = self.add()
+        for changes in ({"parsed": 1}, {"revision": 8}, {"created_at": "bad"},
+                        {"raw_text": None}, {"raw_text": "  "}, {"observations": None},
+                        {"occurred_at": None}, {"mood": []}, {"made_up": "bad"}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                update_entry(self.path, entry_id, **changes)
+
+    def test_edits_invalidate_parse_state_and_preserve_confirmed_values(self):
+        entry_id = self.add(mood="calm")
+        connection = sqlite3.connect(self.path)
+        connection.execute("UPDATE entries SET parsed=1 WHERE id=?", (entry_id,))
+        connection.commit()
+        connection.close()
+        row = update_entry(self.path, entry_id, observations=[{"symptom": "headache"}])
+        self.assertEqual((row["parsed"], row["revision"], row["mood"]), (0, 2, "calm"))
+
+    def test_failed_observation_write_rolls_back_whole_edit_and_add(self):
+        entry_id = self.add(observations=[{"symptom": "original"}])
+        before = get_entry(self.path, entry_id)
+        connection = sqlite3.connect(self.path)
+        connection.execute("""CREATE TRIGGER fail_observation AFTER INSERT ON observations
+            WHEN NEW.symptom = 'fail' BEGIN SELECT RAISE(ABORT, 'Simulated failure'); END""")
+        connection.close()
+        observations = [{"symptom": "first succeeds"}, {"symptom": "fail"}]
+        with self.assertRaises(StorageError):
+            update_entry(self.path, entry_id, raw_text="Must roll back", observations=observations)
+        self.assertEqual(get_entry(self.path, entry_id), before)
+        with self.assertRaises(StorageError):
+            self.add(observations=observations)
+        self.assertEqual(get_entries(self.path), [before])
+
+    def test_old_version_is_preserved_and_never_migrated(self):
+        path = Path(self.temp.name) / "v1.db"
+        connection = sqlite3.connect(path)
+        connection.execute("CREATE TABLE entries (id INTEGER PRIMARY KEY, raw_text TEXT)")
+        connection.execute("INSERT INTO entries(raw_text) VALUES ('Synthetic old entry')")
+        connection.execute("PRAGMA user_version = 1")
+        connection.commit()
+        connection.close()
+        before = path.read_bytes()
+        for operation in (lambda: init_db(path), lambda: get_entries(path),
+                          lambda: update_entry(path, 1, mood="calm")):
+            with self.assertRaises(SchemaError):
+                operation()
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_missing_observation_table_is_rejected(self):
+        connection = sqlite3.connect(self.path)
+        connection.execute("DROP TABLE observations")
+        connection.close()
+        before = self.path.read_bytes()
+        with self.assertRaises(SchemaError):
+            init_db(self.path)
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_observations_do_not_leak_between_entries(self):
+        first = self.add(observations=[{"symptom": "headache"}])
+        second = self.add(observations=[{"symptom": "fatigue"}])
+        before = get_entry(self.path, second)
+        update_entry(self.path, first, observations=[])
+        self.assertEqual(get_entry(self.path, second), before)
+
+
+    def test_reads_use_one_snapshot_during_concurrent_edit(self):
+        connection = sqlite3.connect(self.path)
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.close()
+        for list_read in (False, True):
+            with self.subTest(list_read=list_read):
+                entry_id = self.add(
+                    observations=[{"symptom": "before"}])
+                before = get_entry(self.path, entry_id)
+                original = store._entry_dict
+                edited = False
+
+                def read_with_interleaved_edit(connection, row):
+                    nonlocal edited
+                    if row is not None and row["id"] == entry_id and not edited:
+                        edited = True
+                        update_entry(self.path, entry_id, raw_text="After concurrent edit",
+                                     observations=[{"symptom": "after"}])
+                    return original(connection, row)
+
+                with patch.object(store, "_entry_dict", side_effect=read_with_interleaved_edit):
+                    if list_read:
+                        result = next(r for r in get_entries(self.path) if r["id"] == entry_id)
+                    else:
+                        result = get_entry(self.path, entry_id)
+                self.assertEqual(result, before)
+                self.assertEqual(get_entry(self.path, entry_id)["observations"][0]["symptom"], "after")
 
 
 if __name__ == "__main__":

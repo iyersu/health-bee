@@ -28,9 +28,9 @@ For each session: select the unchecked day, show the planned change and diff as 
 
 ### Day 3 — editing and structured observations
 
-- [ ] Add optional symptoms, mood, sleep, energy, bleeding, medications, food, and tags; support missing values.
-- [ ] Support editing and repeated observations; keep AI suggestions separate from confirmed values.
-- [ ] Test transactions, validation, and user corrections. Use only fresh test databases while designing the schema.
+- [x] Add optional symptoms, mood, sleep, energy, bleeding, medications, food, and tags; support missing values.
+- [x] Support editing and repeated observations; keep AI suggestions separate from confirmed values.
+- [x] Test transactions, validation, and user corrections. Use only fresh test databases while designing the schema.
 - Done when: incomplete entries and corrections round-trip without losing the raw journal text.
 
 ### Day 4 — local API and access boundary
@@ -171,5 +171,5 @@ For each session: select the unchecked day, show the planned change and diff as 
 | Session/date | Completed | Evidence/checks | Next smallest step |
 | --- | --- | --- | --- |
 | Planning — 2026-09-29 | Repository reviewed; Mac-first scope confirmed; stack and daily plan drafted | Three tracked files inspected; working tree initially clean; official technical docs checked | Confirm proposed dependencies, then Day 2 storage |
-
 | Day 2 — 2026-09-29 | SQLite storage, schema validation, and offline tests implemented | Python 3.9.6; 14 tests passed with `python3 -m unittest discover -s evals -v`; includes a new-process persistence check | Day 3: editing and structured observations |
+| Day 3 — 2026-09-29 | Partial edits, optional health fields, repeated symptoms, user provenance, and entry revisions | 29 offline tests passed with `python3 -m unittest discover -s evals -v`; schema v2 uses fresh databases, no automatic v1 migration | Day 4: local API and access boundary |
