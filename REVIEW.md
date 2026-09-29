@@ -1,6 +1,6 @@
 # Health-bee: review and recommended design
 
-Reviewed September 29, 2026. Scope: the local checkout at /Users/suchitrahari/dev/health-bee, including all three tracked project files and recent commit history. Working tree was clean. No application or tests exist yet, so this is a design review, not a functional or security audit.
+Initial review, September 29, 2026. Scope: the local checkout at /Users/suchitrahari/dev/health-bee, including all three tracked project files and recent commit history. Working tree was clean. At that initial review, no application or tests existed. Days 2–3 have since added storage, editing, health observations, and 29 offline tests. This document remains an architecture review, not a security audit.
 
 ## Recommendation
 
@@ -28,9 +28,9 @@ React, FastAPI, and their dependencies are proposed choices. The existing AGENTS
 - Offline tests and temporary test databases are already part of the plan.
 - .gitignore excludes data/, ordinary database files, environment files, and Python caches.
 
-## What needs changing in the plan
+## Findings from the initial review
 
-1. TODO.md currently puts AI on Day 3 and phone capture on Day 5, before a usable journal UI. Move both behind reliable capture, editing, and retrieval.
+1. The original TODO put AI on Day 3 and phone capture on Day 5. The revised plan moves both behind reliable capture, editing, and retrieval.
 2. The proposed entries schema contains mood, meds, food, and tags but lacks explicit symptoms, sleep, energy, bleeding, and the date an observation refers to. Add optional fields without assuming regular menstrual cycles or requiring cycle tracking.
 3. Separate user-confirmed observations from model suggestions. AI output should never silently replace the user's words or corrections.
 4. Treat the written journal entry as the durable record. Commit it before calling the model. If saving fails, keep the text in the editor and show an actionable error; do not claim success.
@@ -42,7 +42,7 @@ React, FastAPI, and their dependencies are proposed choices. The existing AGENTS
 
 Three screens: **Today**, **History**, and **Settings**.
 
-Today has the date, a generous writing area, optional symptom/mood/sleep/energy/bleeding fields, and a clear saved state. Use neutral colors, good contrast, readable system fonts, visible labels, and keyboard access. Cycle tracking is optional. No streaks or pressure to fill every field.
+Today has the date, a generous writing area, optional symptom/mood/sleep/energy fields and a Menstrual Period section with a Flow selector, and a clear saved state. Use neutral colors, good contrast, readable system fonts, visible labels, and keyboard access. Cycle tracking is optional. No streaks or pressure to fill every field.
 
 History shows dated entries, search, filters, and editing. Later it adds a weekly review with links back to the entries behind each statement. Settings contains local model status, data location, backup/restore, and export/delete controls.
 
@@ -62,6 +62,25 @@ Python/FastAPI
 Start with entries containing an ID, occurrence date/time with offset, created/updated timestamps, raw text, optional confirmed fields, and parse state. A child observations table can hold repeated symptoms and severity without adding a column for every symptom. Keep AI suggestions and model/prompt version separately. Use parameterized SQL, transactions, a schema version, and temporary databases in tests. Keep the existing parsed flag compatible until a more expressive status is deliberately introduced.
 
 The prototype may retain data/journal.db as specified in AGENTS.md. Before sharing, put runtime data in a per-user application-support directory outside the checkout and cloud-synced folders; update the project instructions at that milestone. Moving existing data requires explicit approval and a verified backup.
+
+## Cycle Journal — planned expansion
+
+Use **Menstrual Period** in the product. The current internal `bleeding` field stores flow; naming the UI section does not turn those values into confirmed period records. The terminology update is planned for Day 6, and the complete Cycle Journal for Days 21–25. Existing Day 2–3 functionality stays complete.
+
+| Section | Recorded or calculated content |
+| --- | --- |
+| Menstrual Period | User-confirmed start/end dates, ongoing status, and daily flow |
+| Cycle Phase | User-reported labels kept separate from estimates: Menstrual, Follicular, Ovulatory, Luteal, or Unknown |
+| Symptoms | Actual journal observations linked by date |
+| Predicted Symptoms | Optional estimates from the user's own history, kept separate from experienced symptoms |
+
+Proposed storage extends the journal with period records, daily cycle observations, phase estimates, and symptom predictions. Period records and daily observations are user data. Estimates and predictions include their supporting record revisions, method version, generation time, target date/window, and uncertainty. Corrections and deletions invalidate dependent estimates; backup, restore, export, and deletion cover every new record type. Final table names and schema details are decided on Day 21.
+
+A future migration must preserve existing flow values without assuming each represents a menstrual period. First test on synthetic data; personal database migration requires explicit approval. No schema changes are part of this planning update.
+
+Keep period history and symptom patterns local. Start with explainable calculations rather than asking the language model to invent phases or future symptoms. Define minimum evidence and applicability rules, return Unknown/insufficient history when necessary, and evaluate on future observations without using those observations as prediction inputs. Missing logs are not negative symptom observations. Any numeric confidence needs calibration before display.
+
+The four phase labels are a simplified UI convention: menstruation overlaps the beginning of the follicular phase. Flow can also occur outside a menstrual period. Do not equate a calendar-based phase estimate with confirmed ovulation. These distinctions inform the data model and display wording. Sources: [NICHD](https://www.nichd.nih.gov/health/topics/menstruation/conditioninfo) and [ACOG](https://www.acog.org/womens-health/faqs/abnormal-uterine-bleeding).
 
 ## Privacy requirements
 
