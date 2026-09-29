@@ -21,9 +21,9 @@ For each session: select the unchecked day, show the planned change and diff as 
 
 ### Day 2 — storage foundation
 
-- [ ] Implement journal/store.py with init_db, add_entry, get_entry, and date-range listing.
-- [ ] Add timestamps, occurrence date, raw text, optional confirmed fields, and schema version; retain parsed=0 for unprocessed text.
-- [ ] Test insert/read/reopen, empty-input handling, Unicode, and date boundaries in evals/test_store.py using a temporary database.
+- [x] Implement journal/store.py with init_db, add_entry, get_entry, and date-range listing.
+- [x] Add timestamps, occurrence date, raw text, optional confirmed fields, and schema version; retain parsed=0 for unprocessed text.
+- [x] Test insert/read/reopen, empty-input handling, Unicode, and date boundaries in evals/test_store.py using a temporary database.
 - Done when: an entry survives process restart and tests never touch personal data.
 
 ### Day 3 — editing and structured observations
@@ -171,3 +171,5 @@ For each session: select the unchecked day, show the planned change and diff as 
 | Session/date | Completed | Evidence/checks | Next smallest step |
 | --- | --- | --- | --- |
 | Planning — 2026-09-29 | Repository reviewed; Mac-first scope confirmed; stack and daily plan drafted | Three tracked files inspected; working tree initially clean; official technical docs checked | Confirm proposed dependencies, then Day 2 storage |
+
+| Day 2 — 2026-09-29 | SQLite storage, schema validation, and offline tests implemented | Python 3.9.6; 14 tests passed with `python3 -m unittest discover -s evals -v`; includes a new-process persistence check | Day 3: editing and structured observations |

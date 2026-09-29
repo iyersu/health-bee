@@ -1,0 +1,165 @@
+"""Offline storage checks. Every database is synthetic and temporary."""
+
+from datetime import datetime
+import json
+from pathlib import Path
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import unittest
+
+from journal.store import (
+    SchemaError, StorageError, add_entry, get_entries, get_entry, init_db,
+)
+
+
+class StoreTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.path = Path(self.temp.name) / "nested" / "journal.db"
+        init_db(self.path)
+
+    def add(self, text="Synthetic entry", when="2026-09-29T12:00:00-05:00", **fields):
+        return add_entry(self.path, text, occurred_at=datetime.fromisoformat(when), **fields)
+
+    def test_round_trip_preserves_text_and_confirmed_fields(self):
+        text = "  Synthetic café 🌻\nSecond line\n"
+        entry_id = self.add(text, mood="calm", meds="none recorded", food="soup", tags="test")
+        row = get_entry(self.path, entry_id)
+        self.assertEqual(row["raw_text"], text)
+        self.assertEqual([row[k] for k in ("mood", "meds", "food", "tags")],
+                         ["calm", "none recorded", "soup", "test"])
+        self.assertEqual(row["parsed"], 0)
+        self.assertEqual(row["created_at"], row["updated_at"])
+        self.assertIsNotNone(datetime.fromisoformat(row["created_at"]).utcoffset())
+        self.assertTrue(row["occurred_at"].endswith("-05:00"))
+
+    def test_defaults_and_missing_entry(self):
+        self.assertEqual(get_entries(self.path), [])
+        self.assertIsNone(get_entry(self.path, 999))
+        row = get_entry(self.path, add_entry(self.path, "Synthetic default entry"))
+        self.assertEqual(row["parsed"], 0)
+        for field in ("mood", "meds", "food", "tags"):
+            self.assertIsNone(row[field])
+        self.assertIsNotNone(datetime.fromisoformat(row["occurred_at"]).utcoffset())
+
+    def test_survives_new_python_process(self):
+        entry_id = self.add("Synthetic persistent entry")
+        code = (
+            "import json, sys; from journal.store import get_entry; "
+            "print(json.dumps(get_entry(sys.argv[1], int(sys.argv[2]))))"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code, str(self.path), str(entry_id)],
+            cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, check=True,
+        )
+        self.assertEqual(json.loads(result.stdout)["raw_text"], "Synthetic persistent entry")
+
+    def test_empty_or_invalid_text_is_rejected(self):
+        for value in ("", " \n\t", None, 12):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                add_entry(self.path, value)
+        self.assertEqual(get_entries(self.path), [])
+
+    def test_invalid_fields_and_time_are_rejected(self):
+        for fields in ({"mood": []}, {"tags": {}}, {"occurred_at": datetime(2026, 9, 29)},
+                       {"occurred_at": "2026-09-29"}):
+            with self.subTest(fields=fields), self.assertRaises(ValueError):
+                add_entry(self.path, "Synthetic entry", **fields)
+        self.assertEqual(get_entries(self.path), [])
+
+    def test_date_boundaries_use_original_local_date(self):
+        self.add(when="2026-09-28T23:59:59-05:00")
+        start = self.add(when="2026-09-29T00:00:00-05:00")
+        late = self.add(when="2026-09-29T23:59:59-05:00")
+        end = self.add(when="2026-09-30T00:00:00-05:00")
+        rows = get_entries(self.path, "2026-09-29", "2026-09-30")
+        self.assertEqual([r["id"] for r in rows], [start, late])
+        self.assertEqual(len(get_entries(self.path, until="2026-09-29")), 1)
+        self.assertEqual([r["id"] for r in get_entries(self.path, since="2026-09-30")], [end])
+        self.assertEqual(get_entries(self.path, "2026-09-29", "2026-09-29"), [])
+
+    def test_order_uses_instants_and_id_for_ties(self):
+        later = self.add(when="2026-09-29T09:00:00-07:00")
+        earlier = self.add(when="2026-09-29T10:00:00-05:00")
+        tied = self.add(when="2026-09-29T10:00:00-05:00")
+        self.assertEqual([r["id"] for r in get_entries(self.path)], [earlier, tied, later])
+
+    def test_invalid_date_ranges_and_ids(self):
+        for since, until in (("2026-02-30", None), ("2026-9-1", None), (1, None),
+                             ("2026-10-01", "2026-09-01"), (None, "bad")):
+            with self.subTest(since=since, until=until), self.assertRaises(ValueError):
+                get_entries(self.path, since, until)
+        for value in (0, -1, True, "1"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                get_entry(self.path, value)
+
+    def test_repeated_init_preserves_records_and_version(self):
+        entry_id = self.add()
+        before = self.path.read_bytes()
+        init_db(self.path)
+        self.assertEqual(self.path.read_bytes(), before)
+        self.assertIsNotNone(get_entry(self.path, entry_id))
+        connection = sqlite3.connect(self.path)
+        try:
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 1)
+        finally:
+            connection.close()
+
+    def test_unknown_schema_is_rejected_without_modification(self):
+        other = Path(self.temp.name) / "unknown.db"
+        connection = sqlite3.connect(other)
+        connection.execute("CREATE TABLE legacy (text TEXT)")
+        connection.execute("INSERT INTO legacy VALUES ('Synthetic legacy data')")
+        connection.commit()
+        connection.close()
+        before = other.read_bytes()
+        for operation in (init_db, get_entries):
+            with self.assertRaises(SchemaError):
+                operation(other)
+            self.assertEqual(other.read_bytes(), before)
+
+    def test_future_version_and_changed_columns_are_rejected(self):
+        for sql in ("PRAGMA user_version = 2", "ALTER TABLE entries ADD COLUMN unknown TEXT"):
+            with self.subTest(sql=sql):
+                path = Path(self.temp.name) / ("future.db" if "PRAGMA" in sql else "changed.db")
+                init_db(path)
+                connection = sqlite3.connect(path)
+                connection.execute(sql)
+                connection.close()
+                before = path.read_bytes()
+                with self.assertRaises(SchemaError):
+                    init_db(path)
+                with self.assertRaises(SchemaError):
+                    add_entry(path, "Synthetic entry")
+                self.assertEqual(path.read_bytes(), before)
+
+    def test_missing_database_is_not_silently_created(self):
+        missing = Path(self.temp.name) / "missing.db"
+        for operation in (lambda: get_entries(missing), lambda: get_entry(missing, 1),
+                          lambda: add_entry(missing, "Synthetic entry")):
+            with self.assertRaises(StorageError):
+                operation()
+        self.assertFalse(missing.exists())
+
+    def test_sql_like_text_is_stored_literally(self):
+        text = "Synthetic '); DROP TABLE entries; --"
+        entry_id = self.add(text)
+        self.assertEqual(get_entry(self.path, entry_id)["raw_text"], text)
+        self.assertEqual(len(get_entries(self.path)), 1)
+
+    def test_failed_insert_rolls_back_and_reports_error(self):
+        self.add("Existing synthetic entry")
+        connection = sqlite3.connect(self.path)
+        connection.execute("""CREATE TRIGGER fail_save AFTER INSERT ON entries
+            BEGIN SELECT RAISE(ABORT, 'Simulated failure'); END""")
+        connection.close()
+        with self.assertRaises(StorageError):
+            self.add("Must not appear as saved")
+        self.assertEqual([r["raw_text"] for r in get_entries(self.path)], ["Existing synthetic entry"])
+
+
+if __name__ == "__main__":
+    unittest.main()
