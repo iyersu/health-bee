@@ -41,10 +41,10 @@ The Cycle Journal has four sections: Menstrual Period, Cycle Phase, Symptoms, an
 
 ### Day 4 — local API and access boundary
 
-- [ ] Add the approved FastAPI dependencies and entry create/read/update endpoints.
-- [ ] Bind to 127.0.0.1; add Host/Origin checks, a local session token, and CSRF protection.
-- [ ] Suppress sensitive logs; use no-store responses and validated request limits.
-- [ ] Test rejected unauthorized/cross-origin requests and persistence failures offline.
+- [x] Add the approved FastAPI dependencies and entry create/read/update endpoints.
+- [x] Bind to 127.0.0.1; add Host/Origin checks, a local session token, and CSRF protection.
+- [x] Suppress sensitive logs; use no-store responses and validated request limits.
+- [x] Test rejected unauthorized/cross-origin requests and persistence failures offline.
 - Done when: only the intended local UI session can access entries.
 
 ### Day 5 — clean interface shell
@@ -229,3 +229,4 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 | Day 2 — 2026-09-29 | SQLite storage, schema validation, and offline tests implemented | Python 3.9.6; 14 tests passed with `python3 -m unittest discover -s evals -v`; includes a new-process persistence check | Day 3: editing and structured observations |
 | Day 3 — 2026-09-29 | Partial edits, optional health fields, repeated symptoms, user provenance, and entry revisions | 29 offline tests passed with `python3 -m unittest discover -s evals -v`; schema v2 uses fresh databases, no automatic v1 migration | Day 4: local API and access boundary |
 | Cycle Journal planning — 2026-09-29 | Added Menstrual Period wording and Days 21–25 for cycle records, phase estimates, personal symptom predictions, and evaluation | Documentation review only; schema v2 and completed Day 2–3 work preserved | Continue Day 4; introduce UI wording on Day 6 |
+| Day 4 — 2026-09-30 | Local authenticated loopback API, launcher, pinned dependencies, and startup documentation | 46 offline tests passed with Python 3.12.14; live socket smoke test blocked by sandbox network policy; API binds loopback in launcher | Day 5: clean interface shell |
