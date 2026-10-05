@@ -56,10 +56,10 @@ The Cycle Journal has four sections: Menstrual Period, Cycle Phase, Symptoms, an
 
 ### Day 6 — capture and save
 
-- [ ] Connect the Today editor and optional observation fields to the API.
-- [ ] Use Menstrual Period as the section label and Flow for the existing flow selector. Explain that flow alone does not confirm a period; preserve missing values and allow spotting to be recorded without classifying it as a period.
-- [ ] Show saving/saved/error states and preserve editor text when saving fails.
-- [ ] Prevent accidental double submission; warn before leaving with unsaved edits.
+- [x] Connect the Today editor and optional observation fields to the API.
+- [x] Use Menstrual Period as the section label and Flow for the existing flow selector. Explain that flow alone does not confirm a period; preserve missing values and allow spotting to be recorded without classifying it as a period.
+- [x] Show saving/saved/error states and preserve editor text when saving fails.
+- [x] Prevent accidental double submission; warn before leaving with unsaved edits.
 - Done when: an entry can be saved and reopened after restart with the network disconnected.
 
 ### Day 7 — history, search, and edit
@@ -231,3 +231,4 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 | Cycle Journal planning — 2026-09-29 | Added Menstrual Period wording and Days 21–25 for cycle records, phase estimates, personal symptom predictions, and evaluation | Documentation review only; schema v2 and completed Day 2–3 work preserved | Continue Day 4; introduce UI wording on Day 6 |
 | Day 4 — 2026-09-30 | Local authenticated loopback API, launcher, pinned dependencies, and startup documentation | 46 offline tests passed with Python 3.12.14; live socket smoke test blocked by sandbox network policy; API binds loopback in launcher | Day 5: clean interface shell |
 | Day 5 — 2026-10-05 | React/Vite synthetic UI shell with Today, History, and Settings screens; responsive layout and keyboard-visible controls | Source/configuration checked; Vite dependency install/build blocked by managed package-manager temp-file permissions; no API or real data connected | Day 6: capture and save |
+| Day 6 — 2026-10-05 | Connected Today and History screens to the authenticated local API with in-memory token, save/load/error states, and local-only settings | TypeScript source checked; browser/API integration requires manual run with API session token | Day 7: history, search, and edit |
