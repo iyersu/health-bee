@@ -1,13 +1,70 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
+
 type Screen = "today" | "history" | "settings";
-type Entry = { id:number; raw_text:string; mood?:string|null; energy?:number|null; sleep_hours?:number|null; observations?:unknown[] };
-const API = import.meta.env.VITE_API_ORIGIN ?? "";
-async function api(path:string, token:string, init:RequestInit={}) { const response=await fetch(`${API}${path}`,{...init,headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json",...(init.headers??{})}}); if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.detail||`Request failed (${response.status})`)} return response.json(); }
-function Nav({active,label,icon,onClick}:{active:boolean;label:string;icon:string;onClick:()=>void}){return <button className={`nav ${active?"active":""}`} onClick={onClick} aria-current={active?"page":undefined}><span>{icon}</span>{label}</button>}
-function Today({token,onSaved}:{token:string;onSaved:(e:Entry)=>void}){const[note,setNote]=useState("");const[mood,setMood]=useState("steady");const[energy,setEnergy]=useState("6");const[sleep,setSleep]=useState("");const[status,setStatus]=useState("idle");const[error,setError]=useState("");const[loaded,setLoaded]=useState(false);useEffect(()=>{if(!token)return;api("/api/entries",token).then((entries:Entry[])=>{const e=entries[0];if(e){setNote(e.raw_text);setMood(e.mood??"steady");setEnergy(String(e.energy??6));setSleep(e.sleep_hours==null?"":String(e.sleep_hours))}setLoaded(true)}).catch(()=>setLoaded(true))},[token]);async function save(){if(!note.trim()||status==="saving")return;setStatus("saving");setError("");try{const e=await api("/api/entries",token,{method:"POST",body:JSON.stringify({raw_text:note,mood,energy:Number(energy),sleep_hours:sleep?Number(sleep):null})});setStatus("saved");onSaved(e)}catch(e){setStatus("error");setError(e instanceof Error?e.message:"Could not save the note.")}}const changed=()=>setStatus("idle");const reason=!token?"Connect the local API in Settings first":!note.trim()?"Write a note before saving":"";return <><section className="hero"><div><p className="kicker">Today</p><h1>How are you feeling?</h1><p>A few words are enough. This is your space to be honest and unhurried.</p></div><div className="date"><small>OCT</small><b>05</b><small>2026</small></div></section><section className="grid"><article className="card note"><header><div><h2>Daily note</h2><p>{loaded?"Your local journal":"Loading local entries…"}</p></div><span className="preview">Saved on this Mac</span></header><label className="sr" htmlFor="note">Daily journal note</label><textarea id="note" value={note} onChange={e=>{setNote(e.target.value);changed()}} placeholder="What would you like to remember about today?"/><footer><span className={`save-state ${status}`}>{status==="saved"&&"✓ "}{error||(status==="saved"?"Saved locally — your note is on this Mac.":reason||"Nothing leaves this Mac.")}</span><button className="primary" title={reason||undefined} disabled={!token||!note.trim()||status==="saving"} onClick={save}>{status==="saving"?"Saving…":status==="saved"?"Saved locally":"Save note"}</button></footer></article><aside className="card check"><header><div><h2>Gentle check-in</h2><p>Optional, no right answers.</p></div><span>✦</span></header><label htmlFor="mood">Mood</label><select id="mood" value={mood} onChange={e=>{setMood(e.target.value);changed()}}><option value="steady">Steady</option><option value="tender">Tender</option><option value="energized">Energized</option><option value="low">Low</option></select><label htmlFor="energy">Energy <em>0–10</em></label><input id="energy" type="range" min="0" max="10" value={energy} onChange={e=>{setEnergy(e.target.value);changed()}}/><div className="range"><span>Low</span><span>{energy}</span><span>High</span></div><label htmlFor="sleep">Sleep</label><div className="hours"><input id="sleep" type="number" min="0" max="24" step=".5" value={sleep} onChange={e=>{setSleep(e.target.value);changed()}} placeholder="—"/><span>hours</span></div><p className="future">◌ Menstrual Period tracking will be added later.</p></aside></section><p className="privacy">{token?"Local API connected. The session token is held in memory only.":"Enter your local session token in Settings to enable saving."}</p></>}
-function History({token}:{token:string}){const[entries,setEntries]=useState<Entry[]>([]);const[error,setError]=useState("");useEffect(()=>{if(token)api("/api/entries",token).then(setEntries).catch(e=>setError(e.message))},[token]);return <><section className="heading"><p className="kicker">History</p><h1>Small moments, remembered.</h1><p>Entries saved on this Mac, ordered from newest to oldest.</p></section><section className="list">{error&&<p className="privacy">{error}</p>}{entries.map(e=><article className="card history" key={e.id}><div>Entry {e.id}<span>{e.mood??"No mood recorded"}</span></div><p>{e.raw_text}</p><footer>Local entry<span>{e.observations?.length??0} observations</span></footer></article>)}{!error&&!entries.length&&<p className="privacy">{token?"No entries yet.":"Connect in Settings to load entries."}</p>}</section></>}
-function Settings({token,setToken}:{token:string;setToken:(v:string)=>void}){const[draft,setDraft]=useState(token);return <><section className="heading"><p className="kicker">Settings</p><h1>Your journal, your boundaries.</h1><p>Health-bee connects only to the local API running on this Mac.</p></section><section className="list"><article className="card setting"><b>⌑</b><div><h2>Local API session</h2><p>Paste the token printed by journal.serve. It stays in memory and is cleared on reload.</p><label className="sr" htmlFor="token">Local API session token</label><input id="token" className="token" type="password" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="Paste local session token"/><button className="primary" onClick={()=>setToken(draft.trim())}>Connect</button></div><span>{token?"Connected":"Not connected"}</span></article><article className="card setting"><b>✦</b><div><h2>Local AI</h2><p>Optional analysis will use a model running on this device.</p></div><span>Coming later</span></article></section><p className="privacy">There is no account, analytics, or remote sync.</p></>}
-function App(){const[screen,setScreen]=useState<Screen>("today");const[token,setToken]=useState("");const[refresh,setRefresh]=useState(0);return <div className="shell"><aside><div className="brand"><b>✦</b>health-bee</div><p className="aside-copy">A quiet place to notice what your body is telling you.</p><nav><Nav active={screen==="today"} label="Today" icon="○" onClick={()=>setScreen("today")}/><Nav active={screen==="history"} label="History" icon="◷" onClick={()=>setScreen("history")}/><Nav active={screen==="settings"} label="Settings" icon="⚙" onClick={()=>setScreen("settings")}/></nav><div className="private">⌑ <span><strong>Private by design</strong>Stored on this Mac</span></div></aside><main><header className="top">Monday · October 5, 2026 <span>● Local only</span></header>{screen==="today"?<Today token={token} onSaved={()=>{}}/>:screen==="history"?<History key={refresh} token={token}/>:<Settings token={token} setToken={setToken}/>}</main></div>}
+type Entry = { id: number; occurred_at: string; raw_text: string; mood: string | null; energy: number | null; sleep_hours: number | null; observations: unknown[] };
+
+async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(path, { ...init, headers: { "Content-Type": "application/json", ...(init.headers ?? {}) } });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || "The local journal is unavailable.");
+  }
+  return response.json() as Promise<T>;
+}
+
+const dayLabel = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" });
+const shortDate = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+
+function Nav({ active, label, icon, onClick }: { active: boolean; label: string; icon: string; onClick: () => void }) {
+  return <button className={`nav ${active ? "active" : ""}`} onClick={onClick} aria-current={active ? "page" : undefined}><span>{icon}</span>{label}</button>;
+}
+
+function Today({ onSaved }: { onSaved: () => void }) {
+  const [note, setNote] = useState("");
+  const [mood, setMood] = useState("steady");
+  const [energy, setEnergy] = useState("6");
+  const [sleep, setSleep] = useState("");
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [message, setMessage] = useState("");
+  const dirty = () => { if (status !== "saving") setStatus("idle"); };
+
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (note.trim() && status !== "saved") { event.preventDefault(); event.returnValue = ""; }
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [note, status]);
+
+  async function save() {
+    if (!note.trim() || status === "saving" || status === "saved") return;
+    setStatus("saving"); setMessage("");
+    try {
+      await api<{ id: number }>("/api/entries", { method: "POST", body: JSON.stringify({ raw_text: note, mood, energy: Number(energy), sleep_hours: sleep ? Number(sleep) : null }) });
+      setStatus("saved"); setMessage("Saved to your journal."); onSaved();
+    } catch (error) {
+      setStatus("error"); setMessage(error instanceof Error ? error.message : "Could not save the note.");
+    }
+  }
+
+  const date = new Date();
+  return <>
+    <section className="hero"><div><p className="kicker">Today</p><h1>How are you feeling?</h1><p>A few words are enough. This is your space to be honest and unhurried.</p></div><div className="date"><small>{date.toLocaleString(undefined, { month: "short" }).toUpperCase()}</small><b>{date.getDate()}</b><small>{date.getFullYear()}</small></div></section>
+    <section className="grid"><article className="card note"><header><div><h2>Daily note</h2><p>Start a fresh entry for today.</p></div><span className="preview">Journal</span></header><label className="sr" htmlFor="note">Daily journal note</label><textarea id="note" value={note} onChange={event => { setNote(event.target.value); dirty(); }} placeholder="What would you like to remember about today?"/><footer><span className={`save-state ${status}`} aria-live="polite">{status === "saved" && "✓ "}{message || "Your words are saved only when you choose Save."}</span><button className="primary" disabled={!note.trim() || status === "saving" || status === "saved"} onClick={save}>{status === "saving" ? "Saving…" : status === "saved" ? "Saved" : "Save note"}</button></footer></article>
+      <aside className="card check"><header><div><h2>Gentle check-in</h2><p>Optional, no right answers.</p></div><span>✦</span></header><label htmlFor="mood">Mood</label><select id="mood" value={mood} onChange={event => { setMood(event.target.value); dirty(); }}><option value="steady">Steady</option><option value="tender">Tender</option><option value="energized">Energized</option><option value="low">Low</option></select><label htmlFor="energy">Energy <em>0–10</em></label><input id="energy" type="range" min="0" max="10" value={energy} onChange={event => { setEnergy(event.target.value); dirty(); }}/><div className="range"><span>Low</span><span>{energy}</span><span>High</span></div><label htmlFor="sleep">Sleep</label><div className="hours"><input id="sleep" type="number" min="0" max="24" step=".5" value={sleep} onChange={event => { setSleep(event.target.value); dirty(); }} placeholder="—"/><span>hours</span></div><p className="future">◌ Menstrual Period tracking will be added later.</p></aside></section>
+  </>;
+}
+
+function History({ refresh }: { refresh: number }) {
+  const [entries, setEntries] = useState<Entry[]>([]); const [message, setMessage] = useState("");
+  useEffect(() => { api<Entry[]>("/api/entries").then(all => { setEntries(all.slice(-5).reverse()); setMessage(""); }).catch(error => setMessage(error instanceof Error ? error.message : "Could not load entries.")); }, [refresh]);
+  return <><section className="heading"><p className="kicker">History</p><h1>Recent journal entries</h1><p>Five most recent notes, with the check-ins you chose to record.</p></section>{message ? <p className="notice error">{message}</p> : entries.length ? <div className="history-table-wrap"><table><caption className="sr">Five most recent journal entries</caption><thead><tr><th>Date</th><th>Mood</th><th>Energy</th><th>Sleep</th><th>Note</th></tr></thead><tbody>{entries.map(entry => <tr key={entry.id}><td>{shortDate.format(new Date(entry.occurred_at))}</td><td>{entry.mood ?? "—"}</td><td>{entry.energy ?? "—"}</td><td>{entry.sleep_hours == null ? "—" : `${entry.sleep_hours}h`}</td><td>{entry.raw_text}</td></tr>)}</tbody></table></div> : <p className="notice">No journal entries yet. Your saved notes will appear here.</p>}</>;
+}
+
+function Settings() { return <><section className="heading"><p className="kicker">Settings</p><h1>Your journal, your boundaries.</h1><p>The local launcher connects this browser to the journal automatically.</p></section><section className="list"><article className="card setting"><b>⌑</b><div><h2>Private by design</h2><p>Your journal stays on this Mac. The browser has no account or remote sync.</p></div><span>Connected</span></article><article className="card setting"><b>✦</b><div><h2>Local AI</h2><p>Optional analysis will use a model running on this device.</p></div><span>Coming later</span></article><article className="card setting"><b>↗</b><div><h2>Backups</h2><p>Encrypted local backups and export controls are planned.</p></div><span>Coming later</span></article></section></>; }
+
+function App() { const [screen, setScreen] = useState<Screen>("today"); const [refresh, setRefresh] = useState(0); return <div className="shell"><aside><div className="brand"><b>✦</b>health-bee</div><p className="aside-copy">A quiet place to notice what your body is telling you.</p><nav><Nav active={screen === "today"} label="Today" icon="○" onClick={() => setScreen("today")}/><Nav active={screen === "history"} label="History" icon="◷" onClick={() => setScreen("history")}/><Nav active={screen === "settings"} label="Settings" icon="⚙" onClick={() => setScreen("settings")}/></nav><div className="private">⌑ <span><strong>Private by design</strong>Stored on this Mac</span></div></aside><main><header className="top">{dayLabel.format(new Date())}<span>Journal ready</span></header>{screen === "today" ? <Today onSaved={() => setRefresh(value => value + 1)}/> : screen === "history" ? <History refresh={refresh}/> : <Settings/>}</main></div>; }
+
 createRoot(document.getElementById("root")!).render(<StrictMode><App/></StrictMode>);

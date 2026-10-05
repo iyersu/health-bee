@@ -9,6 +9,7 @@ Use Python 3.12. The pinned dependencies were tested with Python 3.12.14. Apple'
 ```bash
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements-dev.txt
+npm install
 ```
 
 For running only, install `requirements.txt`. Downloads require internet during setup; running the API and tests afterward does not. On the original development Mac, an isolated `.venv` has already been prepared using the available Python 3.12 runtime. Use `.venv/bin/python` directly there. Other Macs need their own Python 3.12 installation and virtual environment; do not copy `.venv`.
@@ -23,32 +24,21 @@ From the repository root:
 
 Tests use synthetic data and temporary databases. HTTP tests run in-process and do not open a listening socket. The current Starlette release emits a deprecation notice for its supported HTTPX test-client integration; it does not affect the test results.
 
-## Try a separate demo database
+## Start Health-bee
 
 ```bash
-demo_dir=$(mktemp -d)
-.venv/bin/python -m journal.serve --db "$demo_dir/journal.db" --init-db
+npm run start:local
 ```
 
-This creates a new demo database and starts the API on `http://127.0.0.1:8000`. It also prints the path of a private session file. Leave this Terminal open; stop with Ctrl+C. The demo database persists in that temporary directory until removed by you or the operating system.
+This one command creates or verifies `data/journal.db`, starts the API on loopback, starts the browser UI at `http://127.0.0.1:5173`, and connects them automatically. The session token is kept in an owner-only temporary file and injected only into Vite's local API proxy. It never appears in the browser, a URL, or browser storage. Press Ctrl+C once to stop both services.
 
-In a second Terminal:
+For a disposable demo database instead of your personal journal, use:
 
 ```bash
-curl http://127.0.0.1:8000/api/health
+npm run start:local -- --db /tmp/health-bee-demo.db --init-db
 ```
 
-Expected: `{"status":"ok"}`. This is a liveness check, not confirmation that storage is usable.
-
-## Day 6 browser capture
-
-Keep the API terminal running. In a second Terminal, from the repository root, start the Vite UI:
-
-```bash
-npm run dev
-```
-
-Open `http://127.0.0.1:5173`, choose Settings, and paste the session-file token printed by the API launcher. The token is held in browser memory only. Return to Today, write a synthetic note, and click Save note. History reads saved entries through the local Vite proxy. The UI never calls a hosted service.
+Open `http://127.0.0.1:5173`. Write a note, optionally add mood, energy, and sleep, then save it. History shows the five most recent entries. After a successful save, change the note to begin another entry.
 
 ### Make an authenticated sample request
 
@@ -72,7 +62,7 @@ with opener.open(request) as response:
 '
 ```
 
-Use synthetic entries in demos and developer tools. Session files grant access to the journal; do not share them. The file is owner-readable/writable only, within an owner-only directory, and is removed on normal shutdown. Restarting generates a new token, invalidating the old one even if an unclean shutdown left its file behind. Browser session bootstrap is future UI work; there is no unauthenticated token endpoint.
+Use synthetic entries in demos and developer tools. Session files grant access to the journal; do not share them. The file is owner-readable/writable only, within an owner-only directory, and is removed on normal shutdown. Restarting generates a new token, invalidating the old one even if an unclean shutdown left its file behind. `npm run start:local` handles the browser connection through Vite's server-side proxy; there is no browser-visible or unauthenticated token endpoint.
 
 ## API contract
 

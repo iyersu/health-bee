@@ -1,4 +1,4 @@
-"""Start Health-bee on loopback with a temporary, owner-only session file."""
+"""Start Health-bee on loopback with an owner-only session file."""
 
 import argparse
 import json
@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import secrets
 import tempfile
+from contextlib import ExitStack
 
 import uvicorn
 
@@ -17,6 +18,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--db", type=Path, required=True, help="Explicit SQLite database path")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--session-file", type=Path,
+                        help="Owner-only file for a local launcher; must not exist")
     parser.add_argument("--init-db", action="store_true", help="Create/verify schema without migration")
     args = parser.parse_args(argv)
     if not 1024 <= args.port <= 65535:
@@ -30,14 +33,22 @@ def main(argv=None):
         parser.error("database missing; use --init-db to create a new database")
     token = secrets.token_urlsafe(32)
     app = create_app(args.db, token, port=args.port)
-    with tempfile.TemporaryDirectory(prefix="health-bee-session-") as directory:
-        session_file = Path(directory) / "session.json"
+    with ExitStack() as stack:
+        if args.session_file is None:
+            directory = stack.enter_context(tempfile.TemporaryDirectory(prefix="health-bee-session-"))
+            session_file = Path(directory) / "session.json"
+        else:
+            session_file = args.session_file.expanduser().resolve()
+            if session_file.exists():
+                parser.error("session file already exists")
+            if not session_file.parent.is_dir():
+                parser.error("session-file parent directory does not exist")
         fd = os.open(session_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w") as handle:
             json.dump({"url": f"http://127.0.0.1:{args.port}", "token": token}, handle)
         print(f"Health-bee API: http://127.0.0.1:{args.port}", flush=True)
         print(f"Local session file: {session_file}", flush=True)
-        print("No browser UI yet. Press Ctrl+C to stop.", flush=True)
+        print("Press Ctrl+C to stop.", flush=True)
         uvicorn.run(app, host="127.0.0.1", port=args.port, access_log=False,
                     proxy_headers=False, server_header=False, log_level="warning")
 

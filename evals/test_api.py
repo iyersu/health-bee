@@ -216,6 +216,26 @@ class ApiTests(unittest.TestCase):
             main(["--db", str(self.db)])
         self.assertFalse(session_files[0].exists())
 
+    def test_launcher_writes_an_explicit_owner_only_session_file(self):
+        session_file = Path(self.temp.name) / "session.json"
+
+        def fake_server(app, **options):
+            self.assertEqual(session_file.stat().st_mode & 0o777, 0o600)
+            session = json.loads(session_file.read_text())
+            self.assertEqual(session["url"], "http://127.0.0.1:8000")
+            self.assertGreaterEqual(len(session["token"]), 32)
+
+        with patch("journal.serve.uvicorn.run", side_effect=fake_server):
+            main(["--db", str(self.db), "--session-file", str(session_file)])
+        self.assertTrue(session_file.exists())
+
+    def test_launcher_refuses_to_overwrite_a_session_file(self):
+        session_file = Path(self.temp.name) / "session.json"
+        session_file.write_text("keep this")
+        with self.assertRaises(SystemExit):
+            main(["--db", str(self.db), "--session-file", str(session_file)])
+        self.assertEqual(session_file.read_text(), "keep this")
+
 
 if __name__ == "__main__":
     unittest.main()
