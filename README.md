@@ -38,7 +38,17 @@ In a second Terminal:
 curl http://127.0.0.1:8000/api/health
 ```
 
-Expected: `{"status":"ok"}`. This is a liveness check, not confirmation that storage is usable. Opening the root URL in a browser returns an error because the UI has not been built yet.
+Expected: `{"status":"ok"}`. This is a liveness check, not confirmation that storage is usable.
+
+## Day 6 browser capture
+
+Keep the API terminal running. In a second Terminal, from the repository root, start the Vite UI:
+
+```bash
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`, choose Settings, and paste the session-file token printed by the API launcher. The token is held in browser memory only. Return to Today, write a synthetic note, and click Save note. History reads saved entries through the local Vite proxy. The UI never calls a hosted service.
 
 ### Make an authenticated sample request
 
