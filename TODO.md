@@ -49,9 +49,9 @@ The Cycle Journal has four sections: Menstrual Period, Cycle Phase, Symptoms, an
 
 ### Day 5 — clean interface shell
 
-- [ ] Scaffold the approved React/TypeScript/Vite frontend with plain CSS and system fonts.
-- [ ] Build Today, History, and Settings navigation with synthetic content; reserve Cycle Journal navigation for Day 22 when it has usable features.
-- [ ] Check keyboard navigation, contrast, focus, and a narrow browser window.
+- [x] Scaffold the approved React/TypeScript/Vite frontend with plain CSS and system fonts.
+- [x] Build Today, History, and Settings navigation with synthetic content; reserve Cycle Journal navigation for Day 22 when it has usable features.
+- [x] Check keyboard navigation, contrast, focus, and a narrow browser window.
 - Done when: the three screens are readable and usable with no remote fonts or scripts.
 
 ### Day 6 — capture and save
@@ -230,3 +230,4 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 | Day 3 — 2026-09-29 | Partial edits, optional health fields, repeated symptoms, user provenance, and entry revisions | 29 offline tests passed with `python3 -m unittest discover -s evals -v`; schema v2 uses fresh databases, no automatic v1 migration | Day 4: local API and access boundary |
 | Cycle Journal planning — 2026-09-29 | Added Menstrual Period wording and Days 21–25 for cycle records, phase estimates, personal symptom predictions, and evaluation | Documentation review only; schema v2 and completed Day 2–3 work preserved | Continue Day 4; introduce UI wording on Day 6 |
 | Day 4 — 2026-09-30 | Local authenticated loopback API, launcher, pinned dependencies, and startup documentation | 46 offline tests passed with Python 3.12.14; live socket smoke test blocked by sandbox network policy; API binds loopback in launcher | Day 5: clean interface shell |
+| Day 5 — 2026-10-05 | React/Vite synthetic UI shell with Today, History, and Settings screens; responsive layout and keyboard-visible controls | Source/configuration checked; Vite dependency install/build blocked by managed package-manager temp-file permissions; no API or real data connected | Day 6: capture and save |
