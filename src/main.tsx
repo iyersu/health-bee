@@ -3,7 +3,8 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 type Screen = "today" | "history" | "settings";
-type Entry = { id: number; occurred_at: string; raw_text: string; mood: string | null; energy: number | null; sleep_hours: number | null; observations: unknown[] };
+type Entry = { id: number; occurred_at: string; raw_text: string; mood: string | null; energy: number | null; sleep_hours: number | null; revision: number; observations: unknown[] };
+type Filters = { query: string; since: string; through: string };
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, { ...init, headers: { "Content-Type": "application/json", ...(init.headers ?? {}) } });
@@ -15,7 +16,15 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 const dayLabel = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" });
-const shortDate = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const shortDate = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" });
+const blankFilters: Filters = { query: "", since: "", through: "" };
+
+function nextDate(value: string) {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
 
 function Nav({ active, label, icon, onClick }: { active: boolean; label: string; icon: string; onClick: () => void }) {
   return <button className={`nav ${active ? "active" : ""}`} onClick={onClick} aria-current={active ? "page" : undefined}><span>{icon}</span>{label}</button>;
@@ -58,9 +67,45 @@ function Today({ onSaved }: { onSaved: () => void }) {
 }
 
 function History({ refresh }: { refresh: number }) {
-  const [entries, setEntries] = useState<Entry[]>([]); const [message, setMessage] = useState("");
-  useEffect(() => { api<Entry[]>("/api/entries").then(all => { setEntries(all.slice(-5).reverse()); setMessage(""); }).catch(error => setMessage(error instanceof Error ? error.message : "Could not load entries.")); }, [refresh]);
-  return <><section className="heading"><p className="kicker">History</p><h1>Recent journal entries</h1><p>Five most recent notes, with the check-ins you chose to record.</p></section>{message ? <p className="notice error">{message}</p> : entries.length ? <div className="history-table-wrap"><table><caption className="sr">Five most recent journal entries</caption><thead><tr><th>Date</th><th>Mood</th><th>Energy</th><th>Sleep</th><th>Note</th></tr></thead><tbody>{entries.map(entry => <tr key={entry.id}><td>{shortDate.format(new Date(entry.occurred_at))}</td><td>{entry.mood ?? "—"}</td><td>{entry.energy ?? "—"}</td><td>{entry.sleep_hours == null ? "—" : `${entry.sleep_hours}h`}</td><td>{entry.raw_text}</td></tr>)}</tbody></table></div> : <p className="notice">No journal entries yet. Your saved notes will appear here.</p>}</>;
+  const [filters, setFilters] = useState<Filters>(blankFilters);
+  const [applied, setApplied] = useState<Filters>(blankFilters);
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [selected, setSelected] = useState<Entry | null>(null);
+  const [message, setMessage] = useState("");
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  useEffect(() => {
+    const payload = { query: applied.query, since: applied.since || null, until: nextDate(applied.through) };
+    api<Entry[]>("/api/entries/search", { method: "POST", body: JSON.stringify(payload) })
+      .then(all => { setEntries(all.reverse()); setMessage(""); })
+      .catch(error => setMessage(error instanceof Error ? error.message : "Could not load entries."));
+  }, [refresh, applied]);
+
+  function choose(entry: Entry) { setSelected(entry); setStatus("idle"); setMessage(""); }
+  function change(field: keyof Pick<Entry, "raw_text" | "mood" | "energy" | "sleep_hours">, value: string) {
+    if (!selected) return;
+    if (field === "mood") setSelected({ ...selected, mood: value || null });
+    else if (field === "raw_text") setSelected({ ...selected, raw_text: value });
+    else setSelected({ ...selected, [field]: value === "" ? null : Number(value) });
+    setStatus("idle");
+  }
+  async function saveEdit() {
+    if (!selected || !selected.raw_text.trim() || status === "saving") return;
+    setStatus("saving"); setMessage("");
+    try {
+      const saved = await api<Entry>(`/api/entries/${selected.id}`, { method: "PATCH", body: JSON.stringify({ raw_text: selected.raw_text, mood: selected.mood, energy: selected.energy, sleep_hours: selected.sleep_hours, revision: selected.revision }) });
+      setSelected(saved); setEntries(all => all.map(entry => entry.id === saved.id ? saved : entry)); setStatus("saved"); setMessage("Changes saved.");
+    } catch (error) {
+      setStatus("error"); setMessage(error instanceof Error ? error.message : "Could not save changes.");
+    }
+  }
+
+  return <><section className="heading"><p className="kicker">History</p><h1>Find a past entry</h1><p>Search stays in this browser-to-local-journal session. Results are newest first.</p></section>
+    <form className="history-filters card" onSubmit={event => { event.preventDefault(); setApplied(filters); setSelected(null); }}><label>Search notes<input value={filters.query} onChange={event => setFilters({ ...filters, query: event.target.value })} placeholder="A word or phrase"/></label><label>From<input type="date" value={filters.since} onChange={event => setFilters({ ...filters, since: event.target.value })}/></label><label>Through<input type="date" value={filters.through} onChange={event => setFilters({ ...filters, through: event.target.value })}/></label><div className="filter-actions"><button className="primary" type="submit">Apply</button><button className="secondary" type="button" onClick={() => { setFilters(blankFilters); setApplied(blankFilters); setSelected(null); }}>Clear</button></div></form>
+    {message && status !== "saved" ? <p className="notice error">{message}</p> : null}
+    {entries.length ? <div className="history-table-wrap"><table><caption className="sr">Matching journal entries</caption><thead><tr><th>Date</th><th>Mood</th><th>Energy</th><th>Sleep</th><th>Note</th><th><span className="sr">Edit</span></th></tr></thead><tbody>{entries.map(entry => <tr key={entry.id}><td>{shortDate.format(new Date(entry.occurred_at))}</td><td>{entry.mood ?? "—"}</td><td>{entry.energy ?? "—"}</td><td>{entry.sleep_hours == null ? "—" : `${entry.sleep_hours}h`}</td><td>{entry.raw_text}</td><td><button className="secondary" onClick={() => choose(entry)}>Edit</button></td></tr>)}</tbody></table></div> : !message ? <p className="notice">No entries match these filters.</p> : null}
+    {selected ? <section className="card edit-entry"><header><div><p className="kicker">Edit entry</p><h2>{shortDate.format(new Date(selected.occurred_at))}</h2></div><button className="secondary" onClick={() => { setSelected(null); setMessage(""); }}>Close</button></header><label htmlFor="edit-note">Note<textarea id="edit-note" value={selected.raw_text} onChange={event => change("raw_text", event.target.value)}/></label><div className="edit-checkin"><label>Mood<select value={selected.mood ?? ""} onChange={event => change("mood", event.target.value)}><option value="">Not recorded</option><option value="steady">Steady</option><option value="tender">Tender</option><option value="energized">Energized</option><option value="low">Low</option></select></label><label>Energy<input type="number" min="0" max="10" value={selected.energy ?? ""} onChange={event => change("energy", event.target.value)}/></label><label>Sleep<input type="number" min="0" max="24" step=".5" value={selected.sleep_hours ?? ""} onChange={event => change("sleep_hours", event.target.value)}/></label></div><footer><span className={`save-state ${status}`} aria-live="polite">{status === "saved" && "✓ "}{message || "Editing a past entry creates a new revision."}</span><button className="primary" disabled={!selected.raw_text.trim() || status === "saving"} onClick={saveEdit}>{status === "saving" ? "Saving…" : "Save changes"}</button></footer></section> : null}
+  </>;
 }
 
 function Settings() { return <><section className="heading"><p className="kicker">Settings</p><h1>Your journal, your boundaries.</h1><p>The local launcher connects this browser to the journal automatically.</p></section><section className="list"><article className="card setting"><b>⌑</b><div><h2>Private by design</h2><p>Your journal stays on this Mac. The browser has no account or remote sync.</p></div><span>Connected</span></article><article className="card setting"><b>✦</b><div><h2>Local AI</h2><p>Optional analysis will use a model running on this device.</p></div><span>Coming later</span></article><article className="card setting"><b>↗</b><div><h2>Backups</h2><p>Encrypted local backups and export controls are planned.</p></div><span>Coming later</span></article></section></>; }

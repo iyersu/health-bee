@@ -26,6 +26,10 @@ class EntryNotFoundError(StorageError):
     """The requested entry does not exist; nothing was changed."""
 
 
+class EntryConflictError(StorageError):
+    """An entry changed after it was read; the caller must reload before editing."""
+
+
 class SchemaError(StorageError):
     """The database needs explicit inspection rather than automatic migration."""
 
@@ -259,7 +263,7 @@ def add_entry(
     return entry_id
 
 
-def update_entry(path: DatabasePath, entry_id: int, **changes) -> dict:
+def update_entry(path: DatabasePath, entry_id: int, *, expected_revision=None, **changes) -> dict:
     """Atomically edit user-confirmed data and return the persisted entry.
 
     Omitted fields remain unchanged; None clears nullable scalar fields.
@@ -277,6 +281,8 @@ def update_entry(path: DatabasePath, entry_id: int, **changes) -> dict:
     """
     if type(entry_id) is not int or entry_id <= 0:
         raise ValueError("entry_id must be a positive integer.")
+    if expected_revision is not None and (type(expected_revision) is not int or expected_revision <= 0):
+        raise ValueError("expected_revision must be a positive integer or None.")
     _validate_fields(changes)
     with _connect(path) as connection:
         connection.execute("BEGIN IMMEDIATE")
@@ -286,6 +292,8 @@ def update_entry(path: DatabasePath, entry_id: int, **changes) -> dict:
         ).fetchone())
         if old is None:
             raise EntryNotFoundError("Journal entry does not exist.")
+        if expected_revision is not None and old["revision"] != expected_revision:
+            raise EntryConflictError("Journal entry changed; reload it before saving.")
         if "occurred_at" in changes:
             changes.update(_occurrence_fields(changes.pop("occurred_at")))
         observations = changes.pop("observations", None)
@@ -333,16 +341,20 @@ def _date_bound(value):
 
 
 def get_entries(
-    path: DatabasePath, since: Optional[str] = None, until: Optional[str] = None
+    path: DatabasePath, since: Optional[str] = None, until: Optional[str] = None,
+    query: Optional[str] = None,
 ) -> list:
     """List entries where since <= occurrence_date < until, oldest instant first.
 
-    Bounds are optional ISO calendar dates. Equal bounds return an empty list;
+    Bounds are optional ISO calendar dates. query is an optional literal,
+    case-insensitive substring of raw_text. Equal bounds return an empty list;
     reversed bounds raise ValueError. Offset changes do not shift an entry's day.
     """
     since, until = _date_bound(since), _date_bound(until)
     if since is not None and until is not None and since > until:
         raise ValueError("since must not be later than until.")
+    if query is not None and not isinstance(query, str):
+        raise ValueError("Search text must be a string or None.")
     clauses, values = [], []
     if since is not None:
         clauses.append("occurrence_date >= ?")
@@ -350,6 +362,10 @@ def get_entries(
     if until is not None:
         clauses.append("occurrence_date < ?")
         values.append(until)
+    if query:
+        escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        clauses.append("raw_text LIKE ? ESCAPE '\\'")
+        values.append("%" + escaped + "%")
     query = "SELECT * FROM entries"
     if clauses:
         query += " WHERE " + " AND ".join(clauses)

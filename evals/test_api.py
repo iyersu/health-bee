@@ -53,6 +53,34 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(after["revision"], before["revision"] + 1)
         self.assertEqual(after, store.get_entry(self.db, entry_id))
 
+    def test_private_search_filters_dates_and_escapes_like_characters(self):
+        first = self.create(raw_text="Morning walk and tea", occurred_at="2026-09-29T08:00:00-05:00").json()["id"]
+        second = self.create(raw_text="Evening walk, 100% complete", occurred_at="2026-09-29T20:00:00-05:00").json()["id"]
+        self.create(raw_text="Walk planned tomorrow", occurred_at="2026-09-30T08:00:00-05:00")
+        response = self.client.post("/api/entries/search", headers=AUTH,
+                                    json={"query": "walk", "since": "2026-09-29", "until": "2026-09-30"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([entry["id"] for entry in response.json()], [first, second])
+        literal = self.client.post("/api/entries/search", headers=AUTH, json={"query": "100%"})
+        self.assertEqual([entry["id"] for entry in literal.json()], [second])
+        none = self.client.post("/api/entries/search", headers=AUTH, json={"query": "not present"})
+        self.assertEqual(none.status_code, 200)
+        self.assertEqual(none.json(), [])
+        self.assertEqual(self.client.post("/api/entries/search", headers=AUTH,
+                                          json={"query": "x", "unknown": "x"}).status_code, 422)
+
+    def test_edit_rejects_a_stale_revision_without_overwriting(self):
+        entry_id = self.create(raw_text="Original note").json()["id"]
+        original = self.client.get(f"/api/entries/{entry_id}", headers=AUTH).json()
+        saved = self.client.patch(f"/api/entries/{entry_id}", headers=AUTH,
+                                  json={"raw_text": "First correction", "revision": original["revision"]})
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()["revision"], original["revision"] + 1)
+        stale = self.client.patch(f"/api/entries/{entry_id}", headers=AUTH,
+                                  json={"raw_text": "Stale correction", "revision": original["revision"]})
+        self.assertEqual(stale.status_code, 409)
+        self.assertEqual(store.get_entry(self.db, entry_id)["raw_text"], "First correction")
+
     def test_journal_routes_require_token_before_storage_or_parsing(self):
         with patch("journal.api.store.get_entries") as read:
             for headers in ({}, {"Authorization": "Bearer incorrect"}):

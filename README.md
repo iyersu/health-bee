@@ -73,10 +73,13 @@ All journal endpoints require `Authorization: Bearer <session-token>`. Native cl
 | GET | `/api/health` | 200, liveness status; no authentication needed |
 | POST | `/api/entries` | 201, `{"id": ...}` after a committed save |
 | GET | `/api/entries?since=2026-09-01&until=2026-10-01` | 200, entry list |
+| POST | `/api/entries/search` | 200, filtered entry list; search text is in the JSON body |
 | GET | `/api/entries/{id}` | 200, one entry |
 | PATCH | `/api/entries/{id}` | 200, the updated entry |
 
-POST/PATCH require a JSON object and `Content-Type: application/json`. Supported input fields: raw_text, occurred_at (ISO timestamp with offset), mood, meds, food, tags, sleep_hours, energy, bleeding, observations. POST requires raw_text. PATCH preserves omitted fields; null clears nullable scalars, and observations=[] clears symptoms. Observation items accept symptom, severity, and notes. Database-managed fields such as revision, parsed, and source cannot be set by API clients.
+POST/PATCH require a JSON object and `Content-Type: application/json`. Supported input fields: raw_text, occurred_at (ISO timestamp with offset), mood, meds, food, tags, sleep_hours, energy, bleeding, observations. POST requires raw_text. PATCH preserves omitted fields; null clears nullable scalars, and observations=[] clears symptoms. Observation items accept symptom, severity, and notes. A PATCH may include the entry's current positive integer `revision`; a stale revision returns 409 instead of overwriting newer changes. Database-managed fields such as parsed and source cannot be set by API clients.
+
+`POST /api/entries/search` accepts `query`, `since`, and `until`. Search is a literal, case-insensitive note-text match and uses bound SQLite parameters. `query` is never placed in a URL.
 
 The current `bleeding` field is the stored flow value; the upcoming UI section will be called **Menstrual Period**. Flow alone does not confirm a period or cycle phase. No storage-schema changes were made on Day 4.
 

@@ -64,9 +64,9 @@ The Cycle Journal has four sections: Menstrual Period, Cycle Phase, Symptoms, an
 
 ### Day 7 — history, search, and edit
 
-- [ ] Add date filters, simple parameterized SQL search, and editing from History.
-- [ ] Keep search text out of URLs and access logs; handle local dates consistently.
-- [ ] Test multiple entries per day, no results, and edits.
+- [x] Add date filters, simple parameterized SQL search, and editing from History.
+- [x] Keep search text out of URLs and access logs; handle local dates consistently.
+- [x] Test multiple entries per day, no results, and edits.
 - Done when: a user can find and correct a past entry without AI.
 
 ### Day 8 — local backup and restore
@@ -233,3 +233,4 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 | Day 5 — 2026-10-05 | React/Vite synthetic UI shell with Today, History, and Settings screens; responsive layout and keyboard-visible controls | Source/configuration checked; Vite dependency install/build blocked by managed package-manager temp-file permissions; no API or real data connected | Day 6: capture and save |
 | Day 6 — 2026-10-05 | Connected Today and History screens to the authenticated local API with save/load/error states and local-only settings | TypeScript source checked; manual browser/API integration required a session token | UX cleanup and Day 7: search and edit |
 | UX cleanup — 2026-10-05 | Added one-command local startup, automatic proxy authentication, streamlined privacy copy, explicit save confirmation, fresh-entry behavior, and a five-entry history table | 48 offline API tests and TypeScript check passed; production build checked | Day 7: history, search, and edit |
+| Day 7 — 2026-10-06 | Added private POST-based search, inclusive local-date filters, History editing, and revision-conflict protection | 50 offline API tests and production build passed | Day 8: local backup and restore |

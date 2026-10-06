@@ -17,6 +17,7 @@ _ALLOWED_FIELDS = {
     "raw_text", "occurred_at", "mood", "meds", "food", "tags",
     "sleep_hours", "energy", "bleeding", "observations",
 }
+_SEARCH_FIELDS = {"query", "since", "until"}
 
 
 class LocalAccess:
@@ -170,6 +171,18 @@ def _fields(payload, *, creating):
     return fields
 
 
+def _search_fields(payload):
+    if set(payload) - _SEARCH_FIELDS:
+        raise HTTPException(422, "Only search text and date filters are accepted.")
+    query = payload.get("query", "")
+    if not isinstance(query, str) or len(query) > 1000:
+        raise HTTPException(422, "Search text must be at most 1000 characters.")
+    for name in ("since", "until"):
+        if name in payload and payload[name] is not None and not isinstance(payload[name], str):
+            raise HTTPException(422, "Date filters must be YYYY-MM-DD strings.")
+    return {name: payload.get(name) for name in _SEARCH_FIELDS}
+
+
 def create_app(db_path, token, *, port=8000):
     """Build an app with explicit local configuration; never initialize the DB.
 
@@ -198,6 +211,10 @@ def create_app(db_path, token, *, port=8000):
     async def missing_entry(request, error):
         return JSONResponse({"detail": "Entry not found."}, status_code=404)
 
+    @app.exception_handler(store.EntryConflictError)
+    async def changed_entry(request, error):
+        return JSONResponse({"detail": "This entry changed. Reload it before saving."}, status_code=409)
+
     @app.exception_handler(store.SchemaError)
     async def wrong_schema(request, error):
         return JSONResponse({"detail": "Incompatible database schema; no migration performed."}, status_code=409)
@@ -220,6 +237,10 @@ def create_app(db_path, token, *, port=8000):
     def list_entries(since: str = None, until: str = None):
         return store.get_entries(db_path, since, until)
 
+    @app.post("/api/entries/search")
+    def search_entries(payload: dict = Body(...)):
+        return store.get_entries(db_path, **_search_fields(payload))
+
     @app.get("/api/entries/{entry_id}")
     def read_entry(entry_id: int):
         if not 1 <= entry_id <= 2**63 - 1:
@@ -233,6 +254,10 @@ def create_app(db_path, token, *, port=8000):
     def edit_entry(entry_id: int, payload: dict = Body(...)):
         if not 1 <= entry_id <= 2**63 - 1:
             raise HTTPException(422, "entry_id is outside its valid range.")
-        return store.update_entry(db_path, entry_id, **_fields(payload, creating=False))
+        expected_revision = payload.get("revision")
+        fields = _fields({key: value for key, value in payload.items() if key != "revision"}, creating=False)
+        if expected_revision is not None and (type(expected_revision) is not int or expected_revision <= 0):
+            raise HTTPException(422, "revision must be a positive integer.")
+        return store.update_entry(db_path, entry_id, expected_revision=expected_revision, **fields)
 
     return app
