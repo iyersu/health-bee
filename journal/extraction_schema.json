@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Health-bee optional extraction suggestions",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "suggestions"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "suggestions": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "value", "evidence"],
+        "properties": {
+          "field": {"enum": ["mood", "meds", "food", "tags", "sleep_hours", "energy", "bleeding", "observations"]},
+          "value": {},
+          "evidence": {"type": "string", "minLength": 1, "maxLength": 500}
+        }
+      }
+    }
+  },
+  "description": "The Python validator also enforces field-specific values and exact evidence excerpts. Period status and cycle phase are intentionally excluded."
+}

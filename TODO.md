@@ -87,9 +87,9 @@ The Cycle Journal has four sections: Menstrual Period, Cycle Phase, Symptoms, an
 
 ### Day 10 — extraction contract and fixtures
 
-- [ ] Define a JSON schema for optional suggestions with source evidence.
-- [ ] Create at least 15 synthetic input/expected fixtures: absent information, negation, ambiguous dates, multiple symptoms, and instruction-like journal text. Include spotting versus an explicitly reported period; do not infer a confirmed period or phase from flow alone.
-- [ ] Build offline mocked-response tests for schema validation and timeouts.
+- [x] Define a JSON schema for optional suggestions with source evidence.
+- [x] Create at least 15 synthetic input/expected fixtures: absent information, negation, ambiguous dates, multiple symptoms, and instruction-like journal text. Include spotting versus an explicitly reported period; do not infer a confirmed period or phase from flow alone.
+- [x] Build offline mocked-response tests for schema validation and timeouts.
 - Done when: invalid or invented fields are rejected and tests make no model/network calls.
 
 ### Day 11 — durable save before parsing
@@ -236,3 +236,4 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 | Day 7 — 2026-10-06 | Added private POST-based search, inclusive local-date filters, History editing, and revision-conflict protection | 50 offline API tests and production build passed | Day 8: local backup and restore |
 | Day 8 — 2026-10-06 | Added verified SQLite backup/restore commands with encrypted-destination acknowledgement and explicit replacement confirmation | Synthetic backup, simulated loss, restore, corrupt-backup, and overwrite-refusal tests passed | Day 9: local model setup |
 | Day 9 — 2026-10-06 | Installed Ollama 0.35.1 and downloaded Qwen3 4B through the cloud-disabled, loopback-only launcher; normalized the current Ollama bare SHA-256 digest format | Status verified `qwen3:4b`, digest `sha256:359d7dd4bcdab3d86b87d73ac27966f4dbb9f5efdfcc75d34a8764a09474fae7`, model context 262144, configured context 2048. The managed development sandbox blocks macOS Metal allocation during inference. | Run the synthetic benchmark in a normal macOS Terminal |
+| Day 10 — 2026-10-06 | Added a versioned, evidence-backed optional-suggestion contract and 15 synthetic fixtures; period status and cycle phase are excluded from model suggestions | Offline fixtures and mocked timeout/invalid-response checks pass without model or network calls | Day 11: durable save before parsing |
