@@ -84,9 +84,12 @@ def _installed_model():
     for model in models:
         if isinstance(model, dict) and model.get("name") == MODEL_NAME:
             digest = model.get("digest")
-            if not isinstance(digest, str) or not digest.startswith("sha256:"):
+            if not isinstance(digest, str):
                 raise LocalModelError("Installed model has no valid digest.")
-            return {"name": MODEL_NAME, "digest": digest}
+            digest_value = digest.removeprefix("sha256:")
+            if len(digest_value) != 64 or any(character not in "0123456789abcdef" for character in digest_value.lower()):
+                raise LocalModelError("Installed model has no valid digest.")
+            return {"name": MODEL_NAME, "digest": f"sha256:{digest_value.lower()}"}
     raise LocalModelUnavailable(f"Required local model {MODEL_NAME} is not installed.")
 
 

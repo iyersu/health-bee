@@ -60,6 +60,15 @@ class ModelTests(unittest.TestCase):
                 "model_context_limit": 32768, "configured_context_limit": 2048,
             })
 
+    def test_status_normalizes_the_current_bare_sha256_digest(self):
+        responses = iter([
+            {"models": [{"name": "qwen3:4b", "digest": "B" * 64}]},
+            {"model_info": {"qwen3.context_length": 262144}},
+        ])
+        with patch("journal.model._request", side_effect=lambda *args, **kwargs: next(responses)):
+            status = model.model_status()
+        self.assertEqual(status["digest"], "sha256:" + "b" * 64)
+
     def test_benchmark_uses_only_its_fixed_synthetic_prompt(self):
         generated = {"model": "qwen3:4b", "done": True, "total_duration": 2_000_000,
                      "load_duration": 1_000_000, "prompt_eval_count": 9, "eval_count": 3}
