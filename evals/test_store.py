@@ -1,6 +1,8 @@
 """Offline storage checks. Every database is synthetic and temporary."""
 
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime
+import io
 import json
 from pathlib import Path
 import sqlite3
@@ -11,9 +13,11 @@ import unittest
 from unittest.mock import patch
 
 from journal import store
+from journal import backup as backup_cli
 
 from journal.store import (
-    SCHEMA_VERSION, EntryNotFoundError, update_entry, SchemaError, StorageError, add_entry, get_entries, get_entry, init_db,
+    SCHEMA_VERSION, EntryNotFoundError, update_entry, SchemaError, StorageError, add_entry, backup_database,
+    get_entries, get_entry, init_db, restore_database, verify_database,
 )
 
 
@@ -325,6 +329,72 @@ class StoreTests(unittest.TestCase):
         before = get_entry(self.path, second)
         update_entry(self.path, first, observations=[])
         self.assertEqual(get_entry(self.path, second), before)
+
+    def test_backup_and_restore_survive_simulated_loss(self):
+        entry_id = self.add("Synthetic backup entry", observations=[{"symptom": "headache"}])
+        backup_dir = Path(self.temp.name) / "encrypted-backups"
+        backup_dir.mkdir()
+        backup = backup_dir / "journal-backup.db"
+        self.assertEqual(backup_database(self.path, backup), {"entries": 1, "observations": 1})
+        self.assertEqual(backup.stat().st_mode & 0o777, 0o600)
+        lost = self.path.with_name("journal-lost.db")
+        self.path.rename(lost)
+        self.assertEqual(restore_database(backup, self.path), {"entries": 1, "observations": 1})
+        self.assertEqual(get_entry(self.path, entry_id)["raw_text"], "Synthetic backup entry")
+        self.assertEqual(verify_database(self.path), {"entries": 1, "observations": 1})
+
+    def test_backup_and_restore_refuse_unintended_replacement(self):
+        self.add()
+        destination = Path(self.temp.name) / "existing.db"
+        destination.write_bytes(b"leave this file alone")
+        before = destination.read_bytes()
+        with self.assertRaises(StorageError):
+            backup_database(self.path, destination)
+        with self.assertRaises(StorageError):
+            restore_database(self.path, destination)
+        self.assertEqual(destination.read_bytes(), before)
+        self.assertEqual(restore_database(self.path, destination, replace=True),
+                         {"entries": 1, "observations": 0})
+        self.assertEqual(get_entries(destination)[0]["raw_text"], "Synthetic entry")
+
+    def test_corrupt_or_incompatible_backup_is_rejected_without_restore(self):
+        corrupt = Path(self.temp.name) / "corrupt.db"
+        corrupt.write_bytes(b"not a sqlite database")
+        output = Path(self.temp.name) / "output.db"
+        with self.assertRaises(StorageError):
+            verify_database(corrupt)
+        with self.assertRaises(StorageError):
+            restore_database(corrupt, output)
+        self.assertFalse(output.exists())
+        legacy = Path(self.temp.name) / "legacy.db"
+        connection = sqlite3.connect(legacy)
+        connection.execute("CREATE TABLE legacy (text TEXT)")
+        connection.commit()
+        connection.close()
+        with self.assertRaises(SchemaError):
+            restore_database(legacy, output)
+        self.assertFalse(output.exists())
+
+    def test_backup_command_requires_encryption_acknowledgement(self):
+        destination = Path(self.temp.name) / "backup.db"
+        with patch("journal.backup.store.backup_database") as create, self.assertRaises(SystemExit):
+            with redirect_stderr(io.StringIO()):
+                backup_cli.main(["backup", "--db", str(self.path), "--destination", str(destination)])
+        create.assert_not_called()
+        with patch("journal.backup.store.backup_database", return_value={"entries": 1, "observations": 0}) as create:
+            with redirect_stdout(io.StringIO()):
+                backup_cli.main(["backup", "--db", str(self.path), "--destination", str(destination),
+                                 "--confirm-encrypted-destination"])
+        create.assert_called_once_with(self.path, destination)
+
+    def test_restore_command_requires_exact_replacement_confirmation(self):
+        backup = Path(self.temp.name) / "backup.db"
+        output = Path(self.temp.name) / "journal.db"
+        with patch("journal.backup.store.restore_database") as restore, self.assertRaises(SystemExit):
+            with redirect_stderr(io.StringIO()):
+                backup_cli.main(["restore", "--backup", str(backup), "--output", str(output), "--replace",
+                                 "--confirm-replace", "not-the-output-path"])
+        restore.assert_not_called()
 
 
     def test_reads_use_one_snapshot_during_concurrent_edit(self):

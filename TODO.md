@@ -71,9 +71,9 @@ The Cycle Journal has four sections: Menstrual Period, Cycle Phase, Symptoms, an
 
 ### Day 8 — local backup and restore
 
-- [ ] Add consistent SQLite backups through the storage module, targeting an encrypted local destination.
-- [ ] Restore into a temporary database first and verify records before any replacement.
-- [ ] Explain recovery and verify FileVault before using real personal entries.
+- [x] Add consistent SQLite backups through the storage module, targeting an encrypted local destination.
+- [x] Restore into a temporary database first and verify records before any replacement.
+- [x] Explain recovery and verify FileVault before using real personal entries.
 - Done when: a synthetic journal survives backup, simulated loss, and restore. Replacing a real database still requires explicit approval.
 
 ## Milestone 2 — optional local AI
@@ -234,3 +234,4 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 | Day 6 — 2026-10-05 | Connected Today and History screens to the authenticated local API with save/load/error states and local-only settings | TypeScript source checked; manual browser/API integration required a session token | UX cleanup and Day 7: search and edit |
 | UX cleanup — 2026-10-05 | Added one-command local startup, automatic proxy authentication, streamlined privacy copy, explicit save confirmation, fresh-entry behavior, and a five-entry history table | 48 offline API tests and TypeScript check passed; production build checked | Day 7: history, search, and edit |
 | Day 7 — 2026-10-06 | Added private POST-based search, inclusive local-date filters, History editing, and revision-conflict protection | 50 offline API tests and production build passed | Day 8: local backup and restore |
+| Day 8 — 2026-10-06 | Added verified SQLite backup/restore commands with encrypted-destination acknowledgement and explicit replacement confirmation | Synthetic backup, simulated loss, restore, corrupt-backup, and overwrite-refusal tests passed | Day 9: local model setup |

@@ -38,7 +38,49 @@ For a disposable demo database instead of your personal journal, use:
 npm run start:local -- --db /tmp/health-bee-demo.db --init-db
 ```
 
-Open `http://127.0.0.1:5173`. Write a note, optionally add mood, energy, and sleep, then save it. History shows the five most recent entries. After a successful save, change the note to begin another entry.
+Open `http://127.0.0.1:5173`. Write a note, optionally add mood, energy, and sleep, then save it. History can search, filter, and edit past entries. After a successful save, change the note to begin another entry.
+
+## Back up and recover
+
+Backups are SQLite files containing your journal, so choose an encrypted local destination. On a Mac, confirm FileVault is on before using personal entries:
+
+```bash
+fdesetup status
+```
+
+For an external drive, check that drive's encryption separately. Health-bee requires an explicit acknowledgement but cannot prove that a chosen folder is encrypted.
+
+Create a new backup without overwriting an existing one:
+
+```bash
+.venv/bin/python -m journal.backup backup \
+  --db data/journal.db \
+  --destination /Volumes/EncryptedDrive/health-bee-2026-10-06.db \
+  --confirm-encrypted-destination
+```
+
+Verify it at any time without changing files:
+
+```bash
+.venv/bin/python -m journal.backup verify \
+  --backup /Volumes/EncryptedDrive/health-bee-2026-10-06.db
+```
+
+To recover safely, restore to a **new** path first. The command creates a private temporary database, verifies integrity and schema, then publishes the restored file only if verification succeeds.
+
+```bash
+.venv/bin/python -m journal.backup restore \
+  --backup /Volumes/EncryptedDrive/health-bee-2026-10-06.db \
+  --output /tmp/health-bee-restored.db
+```
+
+Inspect that restored database before replacing a real journal:
+
+```bash
+npm run start:local -- --db /tmp/health-bee-restored.db
+```
+
+Replacing an existing database requires `--replace` and an exact `--confirm-replace` path. Stop Health-bee first, make another verified backup, and only then run a replacement command you have reviewed yourself. Old backups retain the journal data they contained.
 
 ### Make an authenticated sample request
 
@@ -85,7 +127,7 @@ The current `bleeding` field is the stored flow value; the upcoming UI section w
 
 Date filters use each entry's local occurrence date, with an inclusive start and exclusive end. Bodies are limited to 64 KiB, raw_text to 50,000 characters, other top-level text fields to 1,000 characters, and symptom lists to 100 items. Dates and observation values also pass storage validation. JSON must have unique keys and finite numbers.
 
-Errors: 400 invalid host/headers; 401 missing/invalid token; 403 rejected browser origin; 404 missing entry; 409 incompatible schema; 413 oversized body; 415 unsupported content type; 422 invalid input; 503 unavailable storage. Error responses omit journal text, tokens, exception details, and database paths.
+Errors: 400 invalid host/headers; 401 missing/invalid token; 403 rejected browser origin; 404 missing entry; 409 incompatible schema or stale edit; 413 oversized body; 415 unsupported content type; 422 invalid input; 503 unavailable storage. Error responses omit journal text, tokens, exception details, and database paths.
 
 ## Local access and database behavior
 

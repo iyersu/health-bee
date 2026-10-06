@@ -8,8 +8,10 @@ SQLite files are plaintext; disk encryption is a separate protection.
 
 from contextlib import contextmanager
 from datetime import date, datetime, timezone
+import os
 from pathlib import Path
 import math
+import secrets
 import sqlite3
 from typing import Optional, Union
 
@@ -373,3 +375,120 @@ def get_entries(
     with _connect(path, readonly=True) as connection:
         _check_schema(connection)
         return [_entry_dict(connection, row) for row in connection.execute(query, values).fetchall()]
+
+
+def verify_database(path: DatabasePath) -> dict:
+    """Read-only integrity, schema, and record-count check for a journal file.
+
+    The returned counts contain no journal text. This never creates, migrates,
+    or changes the database.
+    """
+    with _connect(path, readonly=True) as connection:
+        _check_schema(connection)
+        result = [row[0] for row in connection.execute("PRAGMA integrity_check")]
+        if result != ["ok"]:
+            raise StorageError("Journal database integrity check failed.")
+        return {
+            "entries": connection.execute("SELECT COUNT(*) FROM entries").fetchone()[0],
+            "observations": connection.execute("SELECT COUNT(*) FROM observations").fetchone()[0],
+        }
+
+
+def _existing_path(path: DatabasePath) -> Path:
+    resolved = Path(path).expanduser().resolve()
+    if not resolved.is_file():
+        raise StorageError("Journal database file is unavailable.")
+    return resolved
+
+
+def _destination_path(path: DatabasePath, *, replace: bool) -> Path:
+    resolved = Path(path).expanduser().resolve()
+    if not resolved.parent.is_dir() or resolved.is_dir():
+        raise StorageError("Backup destination directory is unavailable.")
+    if resolved.exists() and not replace:
+        raise StorageError("Backup destination already exists; refusing to overwrite it.")
+    if replace and not resolved.exists():
+        raise StorageError("Restore destination does not exist; omit replacement confirmation instead.")
+    return resolved
+
+
+def _temporary_database_path(destination: Path) -> Path:
+    for _ in range(10):
+        temporary = destination.with_name("." + destination.name + "." + secrets.token_hex(12) + ".partial")
+        try:
+            descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            os.close(descriptor)
+            return temporary
+        except FileExistsError:
+            continue
+        except OSError as error:
+            raise StorageError("Could not prepare a private temporary database.") from error
+    raise StorageError("Could not prepare a unique temporary database.")
+
+
+def _copy_database(source: Path, destination: Path) -> None:
+    try:
+        with sqlite3.connect(source.as_uri() + "?mode=ro", uri=True) as source_connection:
+            with sqlite3.connect(destination) as destination_connection:
+                source_connection.backup(destination_connection)
+        os.chmod(destination, 0o600)
+    except (sqlite3.Error, OSError) as error:
+        raise StorageError("Could not copy the journal database.") from error
+
+
+def _publish_database(temporary: Path, destination: Path, *, replace: bool) -> None:
+    try:
+        if replace:
+            os.replace(temporary, destination)
+        else:
+            # link() creates the final name without replacing a concurrently-created file.
+            os.link(temporary, destination)
+            os.unlink(temporary)
+        os.chmod(destination, 0o600)
+    except FileExistsError as error:
+        raise StorageError("Backup destination already exists; refusing to overwrite it.") from error
+    except OSError as error:
+        raise StorageError("Could not publish the verified journal database.") from error
+
+
+def _copy_verified(source: DatabasePath, destination: DatabasePath, *, replace: bool) -> dict:
+    source_path = _existing_path(source)
+    destination_path = _destination_path(destination, replace=replace)
+    if source_path == destination_path:
+        raise StorageError("Source and destination must be different journal files.")
+    expected = verify_database(source_path)
+    temporary = _temporary_database_path(destination_path)
+    try:
+        _copy_database(source_path, temporary)
+        copied = verify_database(temporary)
+        if copied != expected:
+            raise StorageError("Verified copy does not match the source record counts.")
+        _publish_database(temporary, destination_path, replace=replace)
+        return copied
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+
+
+def backup_database(source: DatabasePath, destination: DatabasePath) -> dict:
+    """Create a new verified SQLite backup without overwriting an existing file.
+
+    The caller selects and validates an encrypted local destination. The backup
+    uses SQLite's backup API, so it is consistent even when the source uses WAL.
+    """
+    return _copy_verified(source, destination, replace=False)
+
+
+def restore_database(backup: DatabasePath, destination: DatabasePath, *, replace=False) -> dict:
+    """Restore a verified backup into a new file or an explicitly approved replacement.
+
+    A private temporary database is copied and checked before its final name is
+    created. replace=True is for an intentional replacement only.
+    """
+    if type(replace) is not bool:
+        raise ValueError("replace must be a boolean.")
+    return _copy_verified(backup, destination, replace=replace)
