@@ -81,8 +81,8 @@ The Cycle Journal has four sections: Menstrual Period, Cycle Phase, Symptoms, an
 ### Day 9 — local model setup
 
 - [ ] Install Ollama and explicitly download a candidate local model after dependency approval.
-- [ ] Disable cloud features for the running process; restrict endpoint/model selection and redirects.
-- [ ] Benchmark Qwen3 4B on synthetic entries; record memory, latency, model digest, and context limit.
+- [x] Disable cloud features for the running process; restrict endpoint/model selection, proxies, and redirects.
+- [ ] Run the Qwen3 4B synthetic benchmark and record memory, latency, model digest, and context limit after the model is installed.
 - Done when: a disconnected local inference succeeds and an unavailable model produces a useful status without blocking journaling.
 
 ### Day 10 — extraction contract and fixtures
@@ -235,3 +235,4 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 | UX cleanup — 2026-10-05 | Added one-command local startup, automatic proxy authentication, streamlined privacy copy, explicit save confirmation, fresh-entry behavior, and a five-entry history table | 48 offline API tests and TypeScript check passed; production build checked | Day 7: history, search, and edit |
 | Day 7 — 2026-10-06 | Added private POST-based search, inclusive local-date filters, History editing, and revision-conflict protection | 50 offline API tests and production build passed | Day 8: local backup and restore |
 | Day 8 — 2026-10-06 | Added verified SQLite backup/restore commands with encrypted-destination acknowledgement and explicit replacement confirmation | Synthetic backup, simulated loss, restore, corrupt-backup, and overwrite-refusal tests passed | Day 9: local model setup |
+| Day 9 preparation — 2026-10-06 | Added the loopback-only Ollama boundary, cloud-disabled launcher, optional-model Settings status, and synthetic benchmark harness | 62 offline tests and production build passed; Ollama installation and Qwen3 4B download remain pending explicit approval | Install and benchmark Qwen3 4B |

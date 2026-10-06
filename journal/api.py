@@ -9,7 +9,7 @@ from fastapi import Body, FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from journal import store
+from journal import model, store
 
 MAX_BODY_BYTES = 64 * 1024
 MAX_TEXT_CHARS = 50_000
@@ -226,6 +226,13 @@ def create_app(db_path, token, *, port=8000):
     @app.get("/api/health")
     def health():
         return {"status": "ok"}
+
+    @app.get("/api/model/status")
+    def local_model_status():
+        try:
+            return model.model_status()
+        except model.LocalModelError as error:
+            return {"status": "unavailable", "detail": str(error)}
 
     @app.post("/api/entries", status_code=201)
     def add(payload: dict = Body(...)):

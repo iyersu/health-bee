@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from journal import store
+from journal import model, store
 from journal.api import MAX_BODY_BYTES, create_app
 from journal.serve import main
 
@@ -99,6 +99,14 @@ class ApiTests(unittest.TestCase):
             read.assert_not_called()
         self.assertEqual(self.client.get("/docs", headers=AUTH).status_code, 404)
         self.assertEqual(self.client.get("/openapi.json", headers=AUTH).status_code, 404)
+
+    def test_local_model_status_is_optional_and_authenticated(self):
+        self.assertEqual(self.client.get("/api/model/status").status_code, 401)
+        with patch("journal.api.model.model_status", return_value={"status": "ready", "model": "qwen3:4b"}):
+            self.assertEqual(self.client.get("/api/model/status", headers=AUTH).json()["status"], "ready")
+        with patch("journal.api.model.model_status", side_effect=model.LocalModelUnavailable("Model is not installed.")):
+            response = self.client.get("/api/model/status", headers=AUTH)
+        self.assertEqual(response.json(), {"status": "unavailable", "detail": "Model is not installed."})
 
     def test_host_and_origin_validation_even_with_token(self):
         for host in ("evil.example:8000", "127.0.0.1.evil.example:8000", "127.0.0.1:9000"):

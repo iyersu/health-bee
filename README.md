@@ -1,6 +1,6 @@
 # Health-bee
 
-A Mac-first, local women's health journal. Day 4 provides a local HTTP API for the completed SQLite storage and editing features. The browser UI starts on Day 5; local AI and the Cycle Journal are later milestones in TODO.md.
+A Mac-first, local women's health journal. Day 4 provides a local HTTP API for the completed SQLite storage and editing features. The browser UI starts on Day 5; optional local AI and the Cycle Journal are later milestones in TODO.md.
 
 ## Setup
 
@@ -39,6 +39,26 @@ npm run start:local -- --db /tmp/health-bee-demo.db --init-db
 ```
 
 Open `http://127.0.0.1:5173`. Write a note, optionally add mood, energy, and sleep, then save it. History can search, filter, and edit past entries. After a successful save, change the note to begin another entry.
+
+## Optional local AI
+
+Health-bee only accepts a locally installed `qwen3:4b` model through Ollama on `127.0.0.1:11434`. It does not accept model names, endpoints, redirects, or proxy settings from the browser or environment. The Settings screen shows whether that optional model is ready; journaling works when it is unavailable.
+
+Ollama is not installed or downloaded automatically. After explicitly approving the download, install Ollama from its official instructions, pull the fixed local model, and start it through Health-bee's cloud-disabled launcher:
+
+```bash
+ollama pull qwen3:4b
+.venv/bin/python -m journal.model serve
+```
+
+The launcher sets `OLLAMA_NO_CLOUD=1`, binds Ollama to loopback, and clears proxy settings. Leave that terminal running, then use another terminal to check the installed model and benchmark it only with the built-in synthetic prompt:
+
+```bash
+.venv/bin/python -m journal.model status
+.venv/bin/python -m journal.model benchmark
+```
+
+The benchmark prints a local JSON record with model digest, configured and reported context limits, latency, token counts, and best-effort Ollama process memory. It never submits journal text.
 
 ## Back up and recover
 
