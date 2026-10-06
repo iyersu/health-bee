@@ -84,7 +84,7 @@ def validate_suggestions(raw_text, response):
     """Return normalized candidate suggestions after strict structural validation.
 
     Evidence must quote the submitted entry exactly. The allowlist deliberately
-    excludes period status and cycle phase: flow and journal prose alone cannot
+    excludes menstruation status and cycle phase: flow and journal prose alone cannot
     establish either. The caller must still require user review before storage.
     """
     _text(raw_text, "raw_text", maximum=50_000)

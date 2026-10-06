@@ -143,7 +143,7 @@ POST/PATCH require a JSON object and `Content-Type: application/json`. Supported
 
 `POST /api/entries/search` accepts `query`, `since`, and `until`. Search is a literal, case-insensitive note-text match and uses bound SQLite parameters. `query` is never placed in a URL.
 
-The current `bleeding` field is the stored flow value; the upcoming UI section will be called **Menstrual Period**. Flow alone does not confirm a period or cycle phase. No storage-schema changes were made on Day 4.
+The current `bleeding` field is the stored flow value. The future feature is called **Menstrual Cycle Insights**. Flow alone does not confirm a menstruation event or cycle phase. No storage-schema changes were made on Day 4.
 
 Date filters use each entry's local occurrence date, with an inclusive start and exclusive end. Bodies are limited to 64 KiB, raw_text to 50,000 characters, other top-level text fields to 1,000 characters, and symptom lists to 100 items. Dates and observation values also pass storage validation. JSON must have unique keys and finite numbers.
 

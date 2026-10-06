@@ -8,11 +8,11 @@ Each day is one focused work session, roughly 1–3 hours where practical, not a
 
 For each session: select the unchecked day, show the planned change and diff as required by AGENTS.md, implement the smallest complete slice, run relevant offline checks, and record evidence below. Commit working changes as required by AGENTS.md. Use synthetic entries and temporary databases for tests. Ask before adding runtime dependencies/frameworks or changing an existing personal database. Never include personal journal text in a hosted coding assistant.
 
-## Cycle Journal scope
+## Menstrual Cycle Insights scope
 
-Use **Menstrual Period** as the user-facing section name. The current schema-v2 `bleeding` field records flow only; it does not establish period status, start/end dates, or a cycle phase. Keep this implementation detail out of UI labels. Day 6 introduces the wording; Days 21–25 deliver the full optional Cycle Journal after the initial journal pilot.
+Use **Menstrual Cycle Insights** as the user-facing feature name. The current schema-v2 `bleeding` field records flow only; it does not establish a menstruation event, its start/end dates, or a cycle phase. Keep this implementation detail out of UI labels. Days 21–25 deliver the optional cycle timeline, phase estimates, predicted symptoms, and personal insights after the initial journal pilot.
 
-The Cycle Journal has four sections: Menstrual Period, Cycle Phase, Symptoms, and Predicted Symptoms. Phase labels are Menstrual, Follicular, Ovulatory, and Luteal, with Unknown available. Recorded facts, user-reported phase labels, computed estimates, and predicted symptoms must remain distinguishable. Calculations and all supporting history stay local. Completion of Days 2–3 does not imply these later features exist.
+Menstrual Cycle Insights has four sections: Cycle Timeline, Cycle Phase, Symptoms, and Predicted Symptoms. Phase labels are Menstrual, Follicular, Ovulatory, and Luteal, with Unknown available. Recorded facts, user-reported phase labels, computed estimates, and predicted symptoms must remain distinguishable. Calculations and all supporting history stay local. Completion of Days 2–3 does not imply these later features exist.
 
 ## Milestone 1 — reliable journaling
 
@@ -57,7 +57,7 @@ The Cycle Journal has four sections: Menstrual Period, Cycle Phase, Symptoms, an
 ### Day 6 — capture and save
 
 - [x] Connect the Today editor and optional observation fields to the API.
-- [x] Use Menstrual Period as the section label and Flow for the existing flow selector. Explain that flow alone does not confirm a period; preserve missing values and allow spotting to be recorded without classifying it as a period.
+- [x] Use Flow for the existing daily flow selector. Explain that flow alone does not confirm a menstruation event; preserve missing values and allow spotting to be recorded without classifying it as one.
 - [x] Show saving/saved/error states and preserve editor text when saving fails.
 - [x] Prevent accidental double submission; warn before leaving with unsaved edits.
 - Done when: an entry can be saved and reopened after restart with the network disconnected.
@@ -88,7 +88,7 @@ The Cycle Journal has four sections: Menstrual Period, Cycle Phase, Symptoms, an
 ### Day 10 — extraction contract and fixtures
 
 - [x] Define a JSON schema for optional suggestions with source evidence.
-- [x] Create at least 15 synthetic input/expected fixtures: absent information, negation, ambiguous dates, multiple symptoms, and instruction-like journal text. Include spotting versus an explicitly reported period; do not infer a confirmed period or phase from flow alone.
+- [x] Create at least 15 synthetic input/expected fixtures: absent information, negation, ambiguous dates, multiple symptoms, and instruction-like journal text. Include spotting versus an explicitly reported menstruation event; do not infer a confirmed event or phase from flow alone.
 - [x] Build offline mocked-response tests for schema validation and timeouts.
 - Done when: invalid or invented fields are rejected and tests make no model/network calls.
 
@@ -165,25 +165,25 @@ The Cycle Journal has four sections: Menstrual Period, Cycle Phase, Symptoms, an
 - [ ] Fix installation/data-loss issues before widening access.
 - Done when: the pilot runs with separate local databases and models. Publishing or contacting testers is a separate explicit action.
 
-## Milestone 4 — Cycle Journal and personal insights
+## Milestone 4 — Menstrual Cycle Insights
 
 These are later work sessions, not a commitment to enable predictions after 25 calendar days. Collecting enough useful history and evaluating estimates may take several cycles. Core journaling remains available when cycle tracking or estimates are disabled.
 
-### Day 21 — Menstrual Period records and schema design
+### Day 21 — menstrual cycle timeline and schema design
 
-- [ ] Define period records with user-confirmed start date, optional end date, and notes; support ongoing and uncertain records.
-- [ ] Add daily cycle observations with local date, optional user-reported period status, flow, and links to journal entries. Keep spotting outside a confirmed period representable.
+- [ ] Define user-confirmed menstruation events with start date, optional end date, and notes; support ongoing and uncertain records.
+- [ ] Add daily cycle observations with local date, optional user-reported menstruation status, flow, and links to journal entries. Keep spotting outside a confirmed menstruation event representable.
 - [ ] Decide how multiple journal entries on one date link to one daily cycle record; handle conflicts explicitly rather than silently overwriting values.
 - [ ] Specify a versioned migration from schema v2. Preserve existing flow without assuming that it indicates menstruation. Verify migration and recovery on synthetic copies; seek explicit approval before any personal-database migration.
-- [ ] Test date ranges, optional values, conflicting/overlapping period records, and correction behavior.
-- Done when: period events and daily flow are stored separately, and existing recorded facts survive the tested migration path.
+- [ ] Test date ranges, optional values, conflicting/overlapping menstruation events, and correction behavior.
+- Done when: menstruation events and daily flow are stored separately, and existing recorded facts survive the tested migration path.
 
-### Day 22 — Cycle Journal UI
+### Day 22 — Menstrual Cycle Insights UI
 
-- [ ] Add Cycle Journal navigation with Menstrual Period and recorded Symptoms sections and a calendar/timeline.
-- [ ] Let users record and correct period dates and flow; link symptoms to their actual journal dates.
+- [ ] Add Menstrual Cycle Insights navigation with Cycle Timeline and recorded Symptoms sections and a calendar/timeline.
+- [ ] Let users record and correct menstruation dates and flow; link symptoms to their actual journal dates.
 - [ ] Display missing days as unrecorded. Keep cycle tracking optional and avoid forcing regular-cycle assumptions.
-- [ ] Include period/cycle records in local backup, restore, export, and deletion; test the entire round-trip.
+- [ ] Include cycle timeline records in local backup, restore, export, and deletion; test the entire round-trip.
 - Done when: a user can review and correct recorded cycle history offline without enabling estimates or AI.
 
 ### Day 23 — estimated cycle phase
@@ -192,7 +192,7 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 - [ ] Support the display labels Menstrual, Follicular, Ovulatory, Luteal, and Unknown. Treat these as a simplified display model; preserve user-reported labels separately from calculated estimates.
 - [ ] Store estimated date/window, method version, generation time, supporting record revisions, and uncertainty. Date history alone must not be represented as confirmed ovulation.
 - [ ] Handle irregular/missing history and contexts where phase estimation does not apply by returning Unknown instead of forcing a fixed 28-day cycle.
-- [ ] Invalidate/recompute estimates after supporting period dates or observations change or are deleted.
+- [ ] Invalidate/recompute estimates after supporting menstruation dates or observations change or are deleted.
 - Done when: every displayed estimate explains its basis and limitations, with tested Unknown behavior. Local AI may explain calculated results but must not invent phases.
 
 ### Day 24 — predicted symptoms from personal history
@@ -217,7 +217,7 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 
 - Phone capture after deciding whether the phone stores/processes data itself or connects to the Mac. A responsive UI alone does not make the app available offline on a phone.
 - Secure device access/pairing; reconsider the previous Shortcut + Tailscale idea against the strict local-only requirement before adopting it.
-- Further user-requested trends after the Cycle Journal milestone, without causal or diagnostic claims.
+- Further user-requested trends after the Menstrual Cycle Insights milestone, without causal or diagnostic claims.
 - Mac app packaging, additional operating systems, and opt-in manual update checks.
 - App-level encryption if deferred, with tested key recovery and migration.
 
@@ -228,7 +228,7 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 | Planning — 2026-09-29 | Repository reviewed; Mac-first scope confirmed; stack and daily plan drafted | Three tracked files inspected; working tree initially clean; official technical docs checked | Confirm proposed dependencies, then Day 2 storage |
 | Day 2 — 2026-09-29 | SQLite storage, schema validation, and offline tests implemented | Python 3.9.6; 14 tests passed with `python3 -m unittest discover -s evals -v`; includes a new-process persistence check | Day 3: editing and structured observations |
 | Day 3 — 2026-09-29 | Partial edits, optional health fields, repeated symptoms, user provenance, and entry revisions | 29 offline tests passed with `python3 -m unittest discover -s evals -v`; schema v2 uses fresh databases, no automatic v1 migration | Day 4: local API and access boundary |
-| Cycle Journal planning — 2026-09-29 | Added Menstrual Period wording and Days 21–25 for cycle records, phase estimates, personal symptom predictions, and evaluation | Documentation review only; schema v2 and completed Day 2–3 work preserved | Continue Day 4; introduce UI wording on Day 6 |
+| Cycle Journal planning — 2026-09-29 | Added Menstrual Cycle Insights wording and Days 21–25 for cycle records, phase estimates, personal symptom predictions, and evaluation | Documentation review only; schema v2 and completed Day 2–3 work preserved | Continue Day 4; introduce UI wording on Day 6 |
 | Day 4 — 2026-09-30 | Local authenticated loopback API, launcher, pinned dependencies, and startup documentation | 46 offline tests passed with Python 3.12.14; live socket smoke test blocked by sandbox network policy; API binds loopback in launcher | Day 5: clean interface shell |
 | Day 5 — 2026-10-05 | React/Vite synthetic UI shell with Today, History, and Settings screens; responsive layout and keyboard-visible controls | Source/configuration checked; Vite dependency install/build blocked by managed package-manager temp-file permissions; no API or real data connected | Day 6: capture and save |
 | Day 6 — 2026-10-05 | Connected Today and History screens to the authenticated local API with save/load/error states and local-only settings | TypeScript source checked; manual browser/API integration required a session token | UX cleanup and Day 7: search and edit |
@@ -236,4 +236,4 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 | Day 7 — 2026-10-06 | Added private POST-based search, inclusive local-date filters, History editing, and revision-conflict protection | 50 offline API tests and production build passed | Day 8: local backup and restore |
 | Day 8 — 2026-10-06 | Added verified SQLite backup/restore commands with encrypted-destination acknowledgement and explicit replacement confirmation | Synthetic backup, simulated loss, restore, corrupt-backup, and overwrite-refusal tests passed | Day 9: local model setup |
 | Day 9 — 2026-10-06 | Installed Ollama 0.35.1 and downloaded Qwen3 4B through the cloud-disabled, loopback-only launcher; normalized the current Ollama bare SHA-256 digest format | Status verified `qwen3:4b`, digest `sha256:359d7dd4bcdab3d86b87d73ac27966f4dbb9f5efdfcc75d34a8764a09474fae7`, model context 262144, configured context 2048. The managed development sandbox blocks macOS Metal allocation during inference. | Run the synthetic benchmark in a normal macOS Terminal |
-| Day 10 — 2026-10-06 | Added a versioned, evidence-backed optional-suggestion contract and 15 synthetic fixtures; period status and cycle phase are excluded from model suggestions | Offline fixtures and mocked timeout/invalid-response checks pass without model or network calls | Day 11: durable save before parsing |
+| Day 10 — 2026-10-06 | Added a versioned, evidence-backed optional-suggestion contract and 15 synthetic fixtures; menstruation status and cycle phase are excluded from model suggestions | Offline fixtures and mocked timeout/invalid-response checks pass without model or network calls | Day 11: durable save before parsing |
