@@ -108,6 +108,19 @@ class ApiTests(unittest.TestCase):
             response = self.client.get("/api/model/status", headers=AUTH)
         self.assertEqual(response.json(), {"status": "unavailable", "detail": "Model is not installed."})
 
+    def test_manual_parse_is_authenticated_and_accepts_no_browser_options(self):
+        entry_id = self.create().json()["id"]
+        result = self.client.post(f"/api/entries/{entry_id}/parse", json={})
+        self.assertEqual(result.status_code, 401)
+        with patch("journal.api.parse.parse_entry", return_value={"id": 1, "status": "succeeded"}) as parse_entry:
+            result = self.client.post(f"/api/entries/{entry_id}/parse", headers=AUTH, json={})
+        self.assertEqual(result.json(), {"id": 1, "status": "succeeded"})
+        parse_entry.assert_called_once_with(self.db, entry_id)
+        with patch("journal.api.parse.parse_entry") as parse_entry:
+            result = self.client.post(f"/api/entries/{entry_id}/parse", headers=AUTH, json={"model": "other"})
+        self.assertEqual(result.status_code, 422)
+        parse_entry.assert_not_called()
+
     def test_host_and_origin_validation_even_with_token(self):
         for host in ("evil.example:8000", "127.0.0.1.evil.example:8000", "127.0.0.1:9000"):
             self.assertEqual(self.client.get("/api/entries", headers={**AUTH, "Host": host}).status_code, 400)

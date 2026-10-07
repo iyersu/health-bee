@@ -83,6 +83,21 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(payload["options"]["num_ctx"], 2048)
         self.assertEqual((result["ollama_total_duration_ms"], result["ollama_process_memory_bytes"]), (2.0, 1234))
 
+    def test_suggestion_generation_is_pinned_and_bounded(self):
+        generated = {"model": "qwen3:4b", "done": True, "response": "{\"schema_version\":1,\"suggestions\":[]}"}
+        with patch("journal.model._request", return_value=generated) as request:
+            self.assertEqual(model.generate_suggestion_json("Synthetic prompt", timeout=9), generated["response"])
+        payload = request.call_args.args[2]
+        self.assertEqual(payload["model"], "qwen3:4b")
+        self.assertEqual(payload["format"], "json")
+        self.assertEqual(payload["options"]["num_predict"], 512)
+        self.assertEqual(request.call_args.kwargs["timeout"], 9)
+
+    def test_transport_timeout_has_a_distinct_local_error(self):
+        with patch("journal.model.http.client.HTTPConnection", side_effect=TimeoutError("synthetic timeout")):
+            with self.assertRaises(model.LocalModelTimeout):
+                model._request("GET", "/api/tags")
+
     def test_server_environment_disables_cloud_and_proxies(self):
         environment = model.local_ollama_environment({"HTTP_PROXY": "http://proxy", "KEEP": "yes"})
         self.assertEqual(environment["OLLAMA_NO_CLOUD"], "1")

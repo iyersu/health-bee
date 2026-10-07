@@ -11,13 +11,15 @@ from datetime import date, datetime, timezone
 import os
 from pathlib import Path
 import math
+import json
 import secrets
 import sqlite3
 from typing import Optional, Union
 
 
 DatabasePath = Union[str, Path]
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+LEGACY_SCHEMA_VERSION = 2
 
 
 class StorageError(Exception):
@@ -94,6 +96,33 @@ _OBSERVATION_COLUMNS = [
     ("notes", "TEXT", 0, None, 0),
     ("source", "TEXT", 1, "'user'", 0),
 ]
+_PARSE_ATTEMPTS_SCHEMA = """
+CREATE TABLE parse_attempts (
+    id INTEGER PRIMARY KEY,
+    entry_id INTEGER NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+    entry_revision INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('running', 'succeeded', 'unavailable', 'timeout', 'invalid', 'stale')),
+    model TEXT NOT NULL,
+    model_digest TEXT,
+    prompt_version TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    completed_at TEXT,
+    suggestions_json TEXT
+)
+"""
+_PARSE_ATTEMPT_COLUMNS = [
+    ("id", "INTEGER", 0, None, 1),
+    ("entry_id", "INTEGER", 1, None, 0),
+    ("entry_revision", "INTEGER", 1, None, 0),
+    ("status", "TEXT", 1, None, 0),
+    ("model", "TEXT", 1, None, 0),
+    ("model_digest", "TEXT", 0, None, 0),
+    ("prompt_version", "TEXT", 1, None, 0),
+    ("created_at", "TEXT", 1, None, 0),
+    ("completed_at", "TEXT", 0, None, 0),
+    ("suggestions_json", "TEXT", 0, None, 0),
+]
+_PARSE_FINAL_STATUSES = {"succeeded", "unavailable", "timeout", "invalid", "stale"}
 _TEXT_FIELDS = {"mood", "meds", "food", "tags"}
 _EDITABLE_FIELDS = _TEXT_FIELDS | {
     "raw_text", "occurred_at", "sleep_hours", "energy", "bleeding", "observations"
@@ -173,11 +202,23 @@ def _entry_dict(connection, row):
 
 
 def _check_schema(connection):
+    """Return the supported schema version without modifying the database."""
     version = connection.execute("PRAGMA user_version").fetchone()[0]
     columns = [tuple(row)[1:] for row in connection.execute("PRAGMA table_info(entries)")]
     observations = [tuple(row)[1:] for row in connection.execute("PRAGMA table_info(observations)")]
-    if version != SCHEMA_VERSION or columns != _COLUMNS or observations != _OBSERVATION_COLUMNS:
+    if columns != _COLUMNS or observations != _OBSERVATION_COLUMNS:
         raise SchemaError("Unsupported journal schema; no migration was performed.")
+    if version == LEGACY_SCHEMA_VERSION:
+        return version
+    attempts = [tuple(row)[1:] for row in connection.execute("PRAGMA table_info(parse_attempts)")]
+    if version != SCHEMA_VERSION or attempts != _PARSE_ATTEMPT_COLUMNS:
+        raise SchemaError("Unsupported journal schema; no migration was performed.")
+    return version
+
+
+def _require_parse_schema(connection):
+    if _check_schema(connection) != SCHEMA_VERSION:
+        raise SchemaError("Local AI parsing requires the explicit schema-v3 upgrade.")
 
 
 @contextmanager
@@ -218,8 +259,22 @@ def init_db(path: DatabasePath) -> None:
             )
             connection.execute(_OBSERVATIONS_SCHEMA)
             connection.execute("CREATE INDEX observations_entry_idx ON observations(entry_id)")
-            connection.execute("PRAGMA user_version = 2")
+            connection.execute(_PARSE_ATTEMPTS_SCHEMA)
+            connection.execute("CREATE INDEX parse_attempts_entry_idx ON parse_attempts(entry_id)")
+            connection.execute("PRAGMA user_version = 3")
         _check_schema(connection)
+
+
+def migrate_v2_to_v3(path: DatabasePath) -> None:
+    """Upgrade a verified schema-v2 journal to v3; callers must seek approval first."""
+    with _connect(path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        if _check_schema(connection) != LEGACY_SCHEMA_VERSION:
+            raise SchemaError("Only an unchanged schema-v2 journal can be upgraded.")
+        connection.execute(_PARSE_ATTEMPTS_SCHEMA)
+        connection.execute("CREATE INDEX parse_attempts_entry_idx ON parse_attempts(entry_id)")
+        connection.execute("PRAGMA user_version = 3")
+        _require_parse_schema(connection)
 
 
 def add_entry(
@@ -316,6 +371,89 @@ def update_entry(path: DatabasePath, entry_id: int, *, expected_revision=None, *
         return _entry_dict(connection, connection.execute(
             "SELECT * FROM entries WHERE id = ?", (entry_id,)
         ).fetchone())
+
+
+def _parse_attempt_dict(row):
+    if row is None:
+        return None
+    attempt = dict(row)
+    encoded = attempt.pop("suggestions_json")
+    attempt["suggestions"] = None if encoded is None else json.loads(encoded)
+    return attempt
+
+
+def begin_parse_attempt(path: DatabasePath, entry_id: int, *, model_name: str, prompt_version: str) -> dict:
+    """Snapshot a saved entry and record a running analysis attempt before inference."""
+    if type(entry_id) is not int or entry_id <= 0:
+        raise ValueError("entry_id must be a positive integer.")
+    if not isinstance(model_name, str) or not model_name or not isinstance(prompt_version, str) or not prompt_version:
+        raise ValueError("model_name and prompt_version must be nonempty strings.")
+    with _connect(path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        _require_parse_schema(connection)
+        entry = connection.execute("SELECT id, raw_text, revision FROM entries WHERE id = ?", (entry_id,)).fetchone()
+        if entry is None:
+            raise EntryNotFoundError("Journal entry does not exist.")
+        now = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+        cursor = connection.execute(
+            "INSERT INTO parse_attempts (entry_id, entry_revision, status, model, prompt_version, created_at) "
+            "VALUES (?, ?, 'running', ?, ?, ?)",
+            (entry_id, entry["revision"], model_name, prompt_version, now),
+        )
+        return {"id": cursor.lastrowid, "entry_id": entry_id, "entry_revision": entry["revision"],
+                "raw_text": entry["raw_text"]}
+
+
+def set_parse_model_digest(path: DatabasePath, attempt_id: int, digest: str) -> None:
+    """Record the installed local model identity before submitting journal text."""
+    if type(attempt_id) is not int or attempt_id <= 0 or not isinstance(digest, str) or not digest:
+        raise ValueError("attempt_id and digest must be valid values.")
+    with _connect(path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        _require_parse_schema(connection)
+        changed = connection.execute(
+            "UPDATE parse_attempts SET model_digest = ? WHERE id = ? AND status = 'running'", (digest, attempt_id)
+        ).rowcount
+        if changed != 1:
+            raise EntryNotFoundError("Running parse attempt does not exist.")
+
+
+def finish_parse_attempt(path: DatabasePath, attempt_id: int, *, status: str, suggestions=None) -> dict:
+    """Finish an attempt without modifying confirmed fields or an edited entry."""
+    if type(attempt_id) is not int or attempt_id <= 0 or status not in _PARSE_FINAL_STATUSES:
+        raise ValueError("Invalid parse attempt completion.")
+    if status == "succeeded" and not isinstance(suggestions, list):
+        raise ValueError("Successful attempts require validated suggestions.")
+    if status != "succeeded" and suggestions is not None:
+        raise ValueError("Only successful attempts may contain suggestions.")
+    with _connect(path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        _require_parse_schema(connection)
+        attempt = connection.execute("SELECT * FROM parse_attempts WHERE id = ?", (attempt_id,)).fetchone()
+        if attempt is None or attempt["status"] != "running":
+            raise EntryNotFoundError("Running parse attempt does not exist.")
+        if status == "succeeded":
+            revision = connection.execute("SELECT revision FROM entries WHERE id = ?", (attempt["entry_id"],)).fetchone()[0]
+            if revision != attempt["entry_revision"]:
+                status, suggestions = "stale", None
+            else:
+                connection.execute("UPDATE entries SET parsed = 1 WHERE id = ?", (attempt["entry_id"],))
+        completed = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+        encoded = None if suggestions is None else json.dumps(suggestions, separators=(",", ":"), ensure_ascii=False)
+        connection.execute(
+            "UPDATE parse_attempts SET status = ?, completed_at = ?, suggestions_json = ? WHERE id = ?",
+            (status, completed, encoded, attempt_id),
+        )
+        return _parse_attempt_dict(connection.execute("SELECT * FROM parse_attempts WHERE id = ?", (attempt_id,)).fetchone())
+
+
+def get_parse_attempt(path: DatabasePath, attempt_id: int) -> Optional[dict]:
+    """Return metadata and candidate suggestions for one completed or running attempt."""
+    if type(attempt_id) is not int or attempt_id <= 0:
+        raise ValueError("attempt_id must be a positive integer.")
+    with _connect(path, readonly=True) as connection:
+        _require_parse_schema(connection)
+        return _parse_attempt_dict(connection.execute("SELECT * FROM parse_attempts WHERE id = ?", (attempt_id,)).fetchone())
 
 
 def get_entry(path: DatabasePath, entry_id: int) -> Optional[dict]:

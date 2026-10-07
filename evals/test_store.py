@@ -115,6 +115,27 @@ class StoreTests(unittest.TestCase):
         finally:
             connection.close()
 
+    def test_explicit_v2_to_v3_upgrade_preserves_entries_without_auto_migration(self):
+        entry_id = self.add("Synthetic entry before upgrade")
+        connection = sqlite3.connect(self.path)
+        connection.execute("DROP INDEX parse_attempts_entry_idx")
+        connection.execute("DROP TABLE parse_attempts")
+        connection.execute("PRAGMA user_version = 2")
+        connection.close()
+        before = self.path.read_bytes()
+        init_db(self.path)
+        self.assertEqual(self.path.read_bytes(), before)
+        with self.assertRaises(SchemaError):
+            store.begin_parse_attempt(self.path, entry_id, model_name="qwen3:4b", prompt_version="test")
+        store.migrate_v2_to_v3(self.path)
+        self.assertEqual(get_entry(self.path, entry_id)["raw_text"], "Synthetic entry before upgrade")
+        connection = sqlite3.connect(self.path)
+        try:
+            self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
+            self.assertEqual(connection.execute("SELECT COUNT(*) FROM parse_attempts").fetchone()[0], 0)
+        finally:
+            connection.close()
+
     def test_unknown_schema_is_rejected_without_modification(self):
         other = Path(self.temp.name) / "unknown.db"
         connection = sqlite3.connect(other)

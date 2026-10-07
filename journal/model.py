@@ -4,6 +4,7 @@ import argparse
 from datetime import datetime, timezone
 import http.client
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -26,6 +27,10 @@ class LocalModelError(Exception):
 
 class LocalModelUnavailable(LocalModelError):
     """Ollama is not listening locally or the required model is not installed."""
+
+
+class LocalModelTimeout(LocalModelError):
+    """A bounded request to the local Ollama service exceeded its deadline."""
 
 
 def _json_object(data):
@@ -69,6 +74,8 @@ def _request(method, path, payload=None, *, timeout=30, connection_factory=None)
         if response.status != 200:
             raise LocalModelUnavailable("Local Ollama service or selected model is unavailable.")
         return _json_object(response_body)
+    except TimeoutError as error:
+        raise LocalModelTimeout("Local Ollama request timed out.") from error
     except (OSError, http.client.HTTPException) as error:
         raise LocalModelUnavailable("Local Ollama service is unavailable.") from error
     finally:
@@ -164,6 +171,29 @@ def benchmark_qwen3_4b():
         "prompt_tokens": response.get("prompt_eval_count"),
         "generated_tokens": response.get("eval_count"),
     }
+
+
+def generate_suggestion_json(prompt: str, *, timeout=30):
+    """Ask only the pinned loopback model for a bounded JSON suggestion response."""
+    if not isinstance(prompt, str) or not prompt or len(prompt) > 60_000:
+        raise ValueError("prompt must be a nonempty bounded string.")
+    if type(timeout) not in (int, float) or not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("timeout must be a positive number.")
+    response = _request("POST", "/api/generate", {
+        "model": MODEL_NAME,
+        "prompt": prompt,
+        "stream": False,
+        "think": False,
+        "keep_alive": "30s",
+        "format": "json",
+        "options": {"num_ctx": BENCHMARK_CONTEXT_LIMIT, "num_predict": 512, "temperature": 0},
+    }, timeout=timeout)
+    if response.get("model") != MODEL_NAME or response.get("done") is not True:
+        raise LocalModelError("Ollama did not complete the local suggestion request.")
+    content = response.get("response")
+    if not isinstance(content, str) or not content or len(content) > 64 * 1024:
+        raise LocalModelError("Ollama returned an invalid suggestion response.")
+    return content
 
 
 def local_ollama_environment(base=None):

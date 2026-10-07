@@ -5,6 +5,7 @@ until then, tests inject synthetic responders directly. Valid suggestions remain
 candidates only and cannot modify a journal entry.
 """
 
+import json
 import math
 
 
@@ -107,6 +108,27 @@ def validate_suggestions(raw_text, response):
         normalized.append({"field": field, "value": _validate_value(field, suggestion["value"], evidence),
                            "evidence": evidence})
     return normalized
+
+
+def decode_and_validate_suggestions(raw_text, response_text):
+    """Decode one strict JSON object from the local model before validating it."""
+    if not isinstance(response_text, str) or len(response_text) > 64 * 1024:
+        raise ExtractionContractError("Suggestion response must be a bounded JSON object.")
+
+    def unique_pairs(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate key")
+            result[key] = value
+        return result
+
+    try:
+        response = json.loads(response_text, object_pairs_hook=unique_pairs,
+                              parse_constant=lambda _: (_ for _ in ()).throw(ValueError("non-finite")))
+    except (UnicodeError, ValueError, json.JSONDecodeError) as error:
+        raise ExtractionContractError("Suggestion response must be valid JSON.") from error
+    return validate_suggestions(raw_text, response)
 
 
 def request_suggestions(raw_text, responder, *, timeout_seconds=30):

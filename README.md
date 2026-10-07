@@ -60,6 +60,18 @@ The launcher sets `OLLAMA_NO_CLOUD=1`, binds Ollama to loopback, and clears prox
 
 The benchmark prints a local JSON record with model digest, configured and reported context limits, latency, token counts, and best-effort Ollama process memory. It never submits journal text.
 
+## Manual local analysis
+
+Day 11 adds the local-only analysis service behind an authenticated API endpoint. It is not shown in the browser UI until Day 12. A request to `POST /api/entries/{id}/parse` with an empty JSON object creates a retryable attempt for an already saved entry. The service records the fixed model identity, prompt version, entry revision, status, and validated candidate suggestions. It never changes confirmed fields.
+
+Existing schema-v2 journals continue to work for ordinary journaling. To enable local analysis, first stop Health-bee and create a verified backup. Then explicitly approve the schema-v3 upgrade:
+
+```bash
+.venv/bin/python -m journal.migrate --db data/journal.db --confirm-v3-upgrade
+```
+
+The upgrade adds separate parse-attempt records; it does not modify journal text or confirmed observations. Do not run it against a personal journal unless you intend to enable local analysis and have reviewed your backup.
+
 ## Back up and recover
 
 Backups are SQLite files containing your journal, so choose an encrypted local destination. On a Mac, confirm FileVault is on before using personal entries:
@@ -138,6 +150,7 @@ All journal endpoints require `Authorization: Bearer <session-token>`. Native cl
 | POST | `/api/entries/search` | 200, filtered entry list; search text is in the JSON body |
 | GET | `/api/entries/{id}` | 200, one entry |
 | PATCH | `/api/entries/{id}` | 200, the updated entry |
+| POST | `/api/entries/{id}/parse` | 200, one manually initiated local analysis attempt |
 
 POST/PATCH require a JSON object and `Content-Type: application/json`. Supported input fields: raw_text, occurred_at (ISO timestamp with offset), mood, meds, food, tags, sleep_hours, energy, bleeding, observations. POST requires raw_text. PATCH preserves omitted fields; null clears nullable scalars, and observations=[] clears symptoms. Observation items accept symptom, severity, and notes. A PATCH may include the entry's current positive integer `revision`; a stale revision returns 409 instead of overwriting newer changes. Database-managed fields such as parsed and source cannot be set by API clients.
 

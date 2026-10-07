@@ -9,7 +9,7 @@ from fastapi import Body, FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from journal import model, store
+from journal import model, parse, store
 
 MAX_BODY_BYTES = 64 * 1024
 MAX_TEXT_CHARS = 50_000
@@ -266,5 +266,14 @@ def create_app(db_path, token, *, port=8000):
         if expected_revision is not None and (type(expected_revision) is not int or expected_revision <= 0):
             raise HTTPException(422, "revision must be a positive integer.")
         return store.update_entry(db_path, entry_id, expected_revision=expected_revision, **fields)
+
+    @app.post("/api/entries/{entry_id}/parse")
+    def parse_saved_entry(entry_id: int, payload: dict = Body(...)):
+        """Start one explicit local-only analysis attempt for an already saved entry."""
+        if not 1 <= entry_id <= 2**63 - 1:
+            raise HTTPException(422, "entry_id is outside its valid range.")
+        if payload:
+            raise HTTPException(422, "Parsing does not accept browser-supplied options.")
+        return parse.parse_entry(db_path, entry_id)
 
     return app

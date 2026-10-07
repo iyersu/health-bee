@@ -94,9 +94,9 @@ Menstrual Cycle Insights has four sections: Cycle Timeline, Cycle Phase, Symptom
 
 ### Day 11 — durable save before parsing
 
-- [ ] Implement journal/parse.py; commit the original entry before any model request.
-- [ ] Keep parsing manually initiated, bounded, and retryable; record model/prompt version and parse status.
-- [ ] Test unavailable service, malformed JSON, timeout, and stale results after editing.
+- [x] Implement journal/parse.py; commit the original entry before any model request.
+- [x] Keep parsing manually initiated, bounded, and retryable; record model/prompt version and parse status.
+- [x] Test unavailable service, malformed JSON, timeout, and stale results after editing.
 - Done when: every AI failure preserves the saved entry and does not overwrite confirmed observations.
 
 ### Day 12 — review AI suggestions
@@ -237,3 +237,4 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 | Day 8 — 2026-10-06 | Added verified SQLite backup/restore commands with encrypted-destination acknowledgement and explicit replacement confirmation | Synthetic backup, simulated loss, restore, corrupt-backup, and overwrite-refusal tests passed | Day 9: local model setup |
 | Day 9 — 2026-10-06 | Installed Ollama 0.35.1 and downloaded Qwen3 4B through the cloud-disabled, loopback-only launcher; normalized the current Ollama bare SHA-256 digest format | Status verified `qwen3:4b`, digest `sha256:359d7dd4bcdab3d86b87d73ac27966f4dbb9f5efdfcc75d34a8764a09474fae7`, model context 262144, configured context 2048. The managed development sandbox blocks macOS Metal allocation during inference. | Run the synthetic benchmark in a normal macOS Terminal |
 | Day 10 — 2026-10-06 | Added a versioned, evidence-backed optional-suggestion contract and 15 synthetic fixtures; menstruation status and cycle phase are excluded from model suggestions | Offline fixtures and mocked timeout/invalid-response checks pass without model or network calls | Day 11: durable save before parsing |
+| Day 11 — 2026-10-06 | Added a manual, bounded local parsing service with separate parse-attempt records and an explicit schema-v3 upgrade | Synthetic success, unavailable service, malformed JSON, timeout, stale-result, migration, and authenticated endpoint checks passed; confirmed entry fields are unchanged | Day 12: review AI suggestions |
