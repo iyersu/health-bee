@@ -6,6 +6,7 @@ import http.client
 import json
 import math
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import time
@@ -19,6 +20,7 @@ MAX_RESPONSE_BYTES = 1024 * 1024
 SYNTHETIC_BENCHMARK_PROMPT = (
     "This is a synthetic local benchmark. Reply with exactly: local benchmark ok"
 )
+EXTRACTION_SCHEMA_PATH = Path(__file__).with_name("extraction_schema.json")
 
 
 class LocalModelError(Exception):
@@ -178,6 +180,17 @@ def benchmark_qwen3_4b():
     }
 
 
+def extraction_response_schema():
+    """Load the versioned local response schema for Ollama structured output."""
+    try:
+        schema = _json_object(EXTRACTION_SCHEMA_PATH.read_bytes())
+    except OSError as error:
+        raise LocalModelError("The local extraction response schema is unavailable.") from error
+    if schema.get("type") != "object":
+        raise LocalModelError("The local extraction response schema is invalid.")
+    return schema
+
+
 def generate_suggestion_json(prompt: str, *, timeout=30):
     """Ask only the pinned loopback model for a bounded JSON suggestion response."""
     if not isinstance(prompt, str) or not prompt or len(prompt) > 60_000:
@@ -190,7 +203,7 @@ def generate_suggestion_json(prompt: str, *, timeout=30):
         "stream": False,
         "think": False,
         "keep_alive": "30s",
-        "format": "json",
+        "format": extraction_response_schema(),
         "options": {"num_ctx": BENCHMARK_CONTEXT_LIMIT, "num_predict": 512, "temperature": 0},
     }, timeout=timeout)
     if response.get("model") != MODEL_NAME or response.get("done") is not True:

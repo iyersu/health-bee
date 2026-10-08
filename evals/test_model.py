@@ -94,9 +94,15 @@ class ModelTests(unittest.TestCase):
             self.assertEqual(model.generate_suggestion_json("Synthetic prompt", timeout=9), generated["response"])
         payload = request.call_args.args[2]
         self.assertEqual(payload["model"], "qwen3:4b")
-        self.assertEqual(payload["format"], "json")
+        self.assertEqual(payload["format"]["title"], "Health-bee optional extraction suggestions")
+        self.assertEqual(payload["format"]["properties"]["schema_version"], {"const": 1})
         self.assertEqual(payload["options"]["num_predict"], 512)
         self.assertEqual(request.call_args.kwargs["timeout"], 9)
+
+    def test_extraction_response_schema_is_a_local_versioned_object(self):
+        schema = model.extraction_response_schema()
+        self.assertEqual(schema["type"], "object")
+        self.assertEqual(schema["required"], ["schema_version", "suggestions"])
 
     def test_transport_timeout_has_a_distinct_local_error(self):
         with patch("journal.model.http.client.HTTPConnection", side_effect=TimeoutError("synthetic timeout")):
