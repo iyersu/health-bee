@@ -72,7 +72,12 @@ def _request(method, path, payload=None, *, timeout=30, connection_factory=None)
         if len(response_body) > MAX_RESPONSE_BYTES:
             raise LocalModelError("Ollama response exceeds the local safety limit.")
         if response.status != 200:
-            raise LocalModelUnavailable("Local Ollama service or selected model is unavailable.")
+            if response.status == 404:
+                raise LocalModelUnavailable("The required local Ollama model or API path is unavailable.")
+            raise LocalModelError(
+                f"Local Ollama rejected {path} with HTTP {response.status}. "
+                "The service is reachable; inspect the Ollama server terminal for its local error."
+            )
         return _json_object(response_body)
     except TimeoutError as error:
         raise LocalModelTimeout("Local Ollama request timed out.") from error

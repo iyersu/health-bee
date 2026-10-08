@@ -31,6 +31,11 @@ class _Connection:
         pass
 
 
+class _RejectedConnection(_Connection):
+    def getresponse(self):
+        return _Response(500, b'{"error":"synthetic internal detail"}')
+
+
 class ModelTests(unittest.TestCase):
     def test_transport_is_pinned_to_loopback_without_redirects(self):
         created = []
@@ -97,6 +102,11 @@ class ModelTests(unittest.TestCase):
         with patch("journal.model.http.client.HTTPConnection", side_effect=TimeoutError("synthetic timeout")):
             with self.assertRaises(model.LocalModelTimeout):
                 model._request("GET", "/api/tags")
+
+    def test_rejected_local_generation_reports_only_endpoint_and_status(self):
+        with self.assertRaisesRegex(model.LocalModelError, r"/api/generate.*HTTP 500") as error:
+            model._request("POST", "/api/generate", {}, connection_factory=_RejectedConnection)
+        self.assertNotIn("synthetic internal detail", str(error.exception))
 
     def test_server_environment_disables_cloud_and_proxies(self):
         environment = model.local_ollama_environment({"HTTP_PROXY": "http://proxy", "KEEP": "yes"})
