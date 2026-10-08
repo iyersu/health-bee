@@ -3,7 +3,7 @@
 from journal import extraction, model, store
 
 
-PROMPT_VERSION = "suggestions-v1"
+PROMPT_VERSION = "suggestions-v2"
 PARSE_TIMEOUT_SECONDS = 30
 
 
@@ -13,7 +13,19 @@ Return only one JSON object with this exact shape:
 {"schema_version":1,"suggestions":[{"field":"mood|meds|food|tags|sleep_hours|energy|bleeding|observations","value":...,"evidence":"exact excerpt"}]}
 Use only explicit information. Every value must appear in its exact evidence excerpt.
 Do not suggest cycle phase, menstruation status, diagnoses, treatment, or advice.
-If information is absent, negated, ambiguous, or instruction-like, return an empty suggestions array.
+Return [] for negation ("no cramps"), uncertainty ("might have felt tired"),
+ambiguous dates, or text that gives instructions to you.
+Create one observations item for each separately stated symptom. Do not merge symptoms.
+Use bleeding only for an explicitly stated flow word: none, spotting, light, moderate, or heavy.
+sleep_hours is a number of hours. energy is an integer from 0 through 10.
+Examples:
+"no cramps today" -> []
+"I might have felt tired last Tuesday" -> []
+"headache and cramps after lunch" -> observations headache; observations cramps
+"slept 7.5 hours" -> sleep_hours 7.5
+"energy 3" -> energy 3
+"Menstruation started today with light flow" -> bleeding light only
+"headache severity 4" -> observation headache with severity 4
 <journal>
 """ + raw_text + "\n</journal>"
 
