@@ -101,16 +101,16 @@ Menstrual Cycle Insights has four sections: Cycle Timeline, Cycle Phase, Symptom
 
 ### Day 12 — review AI suggestions
 
-- [ ] Add an Analyze button and editable suggestion review with accept/reject actions.
-- [ ] Show the journal excerpt supporting each suggestion.
-- [ ] Keep optional fields blank when unknown; test that rejecting suggestions preserves the entry.
+- [x] Add an Analyze button and editable suggestion review with accept/reject actions.
+- [x] Show the journal excerpt supporting each suggestion.
+- [x] Keep optional fields blank when unknown; test that rejecting suggestions preserves the entry.
 - Done when: users control which suggestions become confirmed observations.
 
 ### Day 13 — weekly review
 
-- [ ] Build SQL-based counts and a date-range review first.
-- [ ] Add an optional bounded local summary with links to supporting entries; disclose truncation or missing days.
-- [ ] Test that summaries avoid unsupported diagnoses, causal claims, treatment advice, and fertility predictions.
+- [x] Build SQL-based counts and a date-range review first.
+- [x] Add an optional bounded local summary with links to supporting entries; disclose truncation or missing days.
+- [x] Test that summaries avoid unsupported diagnoses, causal claims, treatment advice, and fertility predictions.
 - Done when: each factual summary statement can be checked against saved entries and the review works without AI.
 
 ### Day 14 — AI evaluation gate
@@ -238,3 +238,5 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 | Day 9 — 2026-10-06 | Installed Ollama 0.35.1 and downloaded Qwen3 4B through the cloud-disabled, loopback-only launcher; normalized the current Ollama bare SHA-256 digest format | Status verified `qwen3:4b`, digest `sha256:359d7dd4bcdab3d86b87d73ac27966f4dbb9f5efdfcc75d34a8764a09474fae7`, model context 262144, configured context 2048. The managed development sandbox blocks macOS Metal allocation during inference. | Run the synthetic benchmark in a normal macOS Terminal |
 | Day 10 — 2026-10-06 | Added a versioned, evidence-backed optional-suggestion contract and 15 synthetic fixtures; menstruation status and cycle phase are excluded from model suggestions | Offline fixtures and mocked timeout/invalid-response checks pass without model or network calls | Day 11: durable save before parsing |
 | Day 11 — 2026-10-06 | Added a manual, bounded local parsing service with separate parse-attempt records and an explicit schema-v3 upgrade | Synthetic success, unavailable service, malformed JSON, timeout, stale-result, migration, and authenticated endpoint checks passed; confirmed entry fields are unchanged | Day 12: review AI suggestions |
+| Day 12 — 2026-10-08 | Added History analysis controls, evidence-backed editable candidates, and explicit confirm/reject actions | Offline tests verify user confirmation, rejection preservation, and authenticated request handling | Day 13: weekly review |
+| Day 13 — 2026-10-08 | Added a local date-range Review with SQL counts, missing-date coverage, bounded source links, and optional deterministic summaries | 84 offline tests and production TypeScript/Vite build passed; summaries have no diagnosis, treatment, causal, or fertility claims | Day 14: AI evaluation gate |

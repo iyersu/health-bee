@@ -9,7 +9,7 @@ from fastapi import Body, FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from journal import model, parse, store
+from journal import model, parse, review, store
 
 MAX_BODY_BYTES = 64 * 1024
 MAX_TEXT_CHARS = 50_000
@@ -18,6 +18,7 @@ _ALLOWED_FIELDS = {
     "sleep_hours", "energy", "bleeding", "observations",
 }
 _SEARCH_FIELDS = {"query", "since", "until"}
+_REVIEW_FIELDS = {"since", "until", "include_summary"}
 
 
 class LocalAccess:
@@ -183,6 +184,14 @@ def _search_fields(payload):
     return {name: payload.get(name) for name in _SEARCH_FIELDS}
 
 
+def _review_fields(payload):
+    if set(payload) - _REVIEW_FIELDS or set(payload) != {"since", "until", "include_summary"}:
+        raise HTTPException(422, "Review requires since, until, and include_summary.")
+    if not isinstance(payload["since"], str) or not isinstance(payload["until"], str) or type(payload["include_summary"]) is not bool:
+        raise HTTPException(422, "Invalid review options.")
+    return payload
+
+
 def create_app(db_path, token, *, port=8000):
     """Build an app with explicit local configuration; never initialize the DB.
 
@@ -275,5 +284,17 @@ def create_app(db_path, token, *, port=8000):
         if payload:
             raise HTTPException(422, "Parsing does not accept browser-supplied options.")
         return parse.parse_entry(db_path, entry_id)
+
+    @app.post("/api/parse-attempts/{attempt_id}/apply")
+    def apply_suggestions(attempt_id: int, payload: dict = Body(...)):
+        if not 1 <= attempt_id <= 2**63 - 1:
+            raise HTTPException(422, "attempt_id is outside its valid range.")
+        if set(payload) != {"selections"}:
+            raise HTTPException(422, "Suggestion application requires selections only.")
+        return store.apply_parse_suggestions(db_path, attempt_id, payload["selections"])
+
+    @app.post("/api/review")
+    def weekly_review(payload: dict = Body(...)):
+        return review.build_review(db_path, **_review_fields(payload))
 
     return app

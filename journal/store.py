@@ -456,6 +456,74 @@ def get_parse_attempt(path: DatabasePath, attempt_id: int) -> Optional[dict]:
         return _parse_attempt_dict(connection.execute("SELECT * FROM parse_attempts WHERE id = ?", (attempt_id,)).fetchone())
 
 
+def apply_parse_suggestions(path: DatabasePath, attempt_id: int, selections: list) -> dict:
+    """Atomically confirm selected candidate values for their unchanged source entry.
+
+    selections contain only saved suggestion indexes and user-edited values. An
+    empty selection is an explicit rejection of every suggestion and is a no-op.
+    """
+    if type(attempt_id) is not int or attempt_id <= 0 or not isinstance(selections, list) or len(selections) > 20:
+        raise ValueError("Invalid suggestion selection.")
+    with _connect(path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        _require_parse_schema(connection)
+        attempt = _parse_attempt_dict(connection.execute("SELECT * FROM parse_attempts WHERE id = ?", (attempt_id,)).fetchone())
+        if attempt is None or attempt["status"] != "succeeded" or not isinstance(attempt["suggestions"], list):
+            raise EntryNotFoundError("Completed parse attempt does not exist.")
+        entry = _entry_dict(connection, connection.execute("SELECT * FROM entries WHERE id = ?", (attempt["entry_id"],)).fetchone())
+        if entry is None:
+            raise EntryNotFoundError("Journal entry does not exist.")
+        if entry["revision"] != attempt["entry_revision"]:
+            raise EntryConflictError("Journal entry changed; review suggestions again.")
+        chosen, seen_indexes, seen_fields = [], set(), set()
+        for selection in selections:
+            if not isinstance(selection, dict) or set(selection) != {"index", "value"}:
+                raise ValueError("Each selected suggestion needs an index and value.")
+            index = selection["index"]
+            if type(index) is not int or not 0 <= index < len(attempt["suggestions"]) or index in seen_indexes:
+                raise ValueError("Selected suggestion indexes must be unique and valid.")
+            saved = attempt["suggestions"][index]
+            field = saved["field"]
+            if field != "observations" and field in seen_fields:
+                raise ValueError("Choose at most one suggestion for each field.")
+            seen_indexes.add(index)
+            seen_fields.add(field)
+            chosen.append((field, selection["value"]))
+        if not chosen:
+            return entry
+        changes, observations = {}, [
+            {
+                "symptom": item["symptom"],
+                "severity": item.get("severity"),
+                "notes": item.get("notes"),
+            }
+            for item in entry["observations"]
+        ]
+        original_observations = list(observations)
+        for field, value in chosen:
+            if field == "observations":
+                observations.append(value)
+            else:
+                changes[field] = value
+        if observations != original_observations:
+            changes["observations"] = observations
+        _validate_fields(changes)
+        saved_observations = changes.pop("observations", None)
+        scalar_changes = {name: value for name, value in changes.items() if entry[name] != value}
+        observation_change = saved_observations is not None and [
+            dict(symptom=item["symptom"], severity=item.get("severity"), notes=item.get("notes"), source="user")
+            for item in saved_observations
+        ] != entry["observations"]
+        if scalar_changes or observation_change:
+            scalar_changes.update(updated_at=datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+                                  revision=entry["revision"] + 1, parsed=0)
+            connection.execute("UPDATE entries SET " + ", ".join(name + " = ?" for name in scalar_changes)
+                               + " WHERE id = ?", tuple(scalar_changes.values()) + (entry["id"],))
+            if observation_change:
+                _replace_observations(connection, entry["id"], saved_observations)
+        return _entry_dict(connection, connection.execute("SELECT * FROM entries WHERE id = ?", (entry["id"],)).fetchone())
+
+
 def get_entry(path: DatabasePath, entry_id: int) -> Optional[dict]:
     """Return one entry, or None if its ID does not exist."""
     if type(entry_id) is not int or entry_id <= 0:

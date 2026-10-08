@@ -1,6 +1,6 @@
 # Health-bee
 
-A Mac-first, local women's health journal. Day 4 provides a local HTTP API for the completed SQLite storage and editing features. The browser UI starts on Day 5; optional local AI and the Cycle Journal are later milestones in TODO.md.
+A Mac-first, local women's health journal. The browser UI supports daily journaling, search and editing, local review summaries, and optional locally run analysis suggestions. Menstrual Cycle Insights remain a later milestone in TODO.md.
 
 ## Setup
 
@@ -62,7 +62,9 @@ The benchmark prints a local JSON record with model digest, configured and repor
 
 ## Manual local analysis
 
-Day 11 adds the local-only analysis service behind an authenticated API endpoint. It is not shown in the browser UI until Day 12. A request to `POST /api/entries/{id}/parse` with an empty JSON object creates a retryable attempt for an already saved entry. The service records the fixed model identity, prompt version, entry revision, status, and validated candidate suggestions. It never changes confirmed fields.
+The local-only analysis service is available in History after the explicit schema-v3 upgrade. Select an entry, choose **Analyze**, review each evidence-backed candidate, edit it if needed, then choose which values to apply. A request to `POST /api/entries/{id}/parse` with an empty JSON object creates a retryable attempt for an already saved entry. The service records the fixed model identity, prompt version, entry revision, status, and validated candidate suggestions. It never changes confirmed fields without this separate confirmation step.
+
+The **Review** screen works without AI. It uses local SQLite counts for a selected date range, displays unrecorded dates, and can optionally add a small deterministic summary. Each summary item links to its supporting saved entries. Ranges are limited to 31 days and supporting links to 25 entries, with truncation shown in the UI. It describes only recorded data and provides no medical, treatment, causal, or fertility guidance.
 
 Existing schema-v2 journals continue to work for ordinary journaling. To enable local analysis, first stop Health-bee and create a verified backup. Then explicitly approve the schema-v3 upgrade:
 
@@ -151,10 +153,14 @@ All journal endpoints require `Authorization: Bearer <session-token>`. Native cl
 | GET | `/api/entries/{id}` | 200, one entry |
 | PATCH | `/api/entries/{id}` | 200, the updated entry |
 | POST | `/api/entries/{id}/parse` | 200, one manually initiated local analysis attempt |
+| POST | `/api/parse-attempts/{id}/apply` | 200, applies selected user-reviewed suggestion values |
+| POST | `/api/review` | 200, local date-range counts and optional source-linked summary |
 
 POST/PATCH require a JSON object and `Content-Type: application/json`. Supported input fields: raw_text, occurred_at (ISO timestamp with offset), mood, meds, food, tags, sleep_hours, energy, bleeding, observations. POST requires raw_text. PATCH preserves omitted fields; null clears nullable scalars, and observations=[] clears symptoms. Observation items accept symptom, severity, and notes. A PATCH may include the entry's current positive integer `revision`; a stale revision returns 409 instead of overwriting newer changes. Database-managed fields such as parsed and source cannot be set by API clients.
 
 `POST /api/entries/search` accepts `query`, `since`, and `until`. Search is a literal, case-insensitive note-text match and uses bound SQLite parameters. `query` is never placed in a URL.
+
+`POST /api/parse-attempts/{id}/apply` accepts only a `selections` array of candidate indexes and edited values. An empty array dismisses the candidates without changing the entry. `POST /api/review` accepts exact `since`, `until` (exclusive), and `include_summary` fields. It reads only confirmed local records.
 
 The current `bleeding` field is the stored flow value. The future feature is called **Menstrual Cycle Insights**. Flow alone does not confirm a menstruation event or cycle phase. No storage-schema changes were made on Day 4.
 
