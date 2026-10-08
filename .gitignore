@@ -1,6 +1,14 @@
 data/
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+backups/
+exports/
+local-evaluation/
 .env
 .venv/
 __pycache__/

@@ -60,6 +60,20 @@ The launcher sets `OLLAMA_NO_CLOUD=1`, binds Ollama to loopback, and clears prox
 
 The benchmark prints a local JSON record with model digest, configured and reported context limits, latency, token counts, and best-effort Ollama process memory. It never submits journal text.
 
+### Evaluate local extraction before release
+
+Use the separate evaluator after Ollama is running. It sends only the 15 version-controlled synthetic fixtures to the fixed loopback model. It never opens the journal database, and its report contains fixture names and metrics rather than input text or model responses.
+
+```bash
+mkdir -p local-evaluation
+.venv/bin/python -m journal.evaluate \
+  --output local-evaluation/qwen3-4b-evaluation.json
+```
+
+The owner-only report records model identity, configured context, field/value accuracy, unexpected suggestions, invalid-output rate, latency, and every fixture that needs inspection. It refuses to overwrite a report. A clean fixture run still requires human review before sharing AI extraction: any invalid, missing, or unexpected suggestion is a release blocker until understood and corrected. This evaluator is separate from the offline test suite and does not run during normal journaling.
+
+If the command says the local model is unavailable, start Ollama through `.venv/bin/python -m journal.model serve` in a normal macOS Terminal and retry. Do not substitute a hosted endpoint or another model.
+
 ## Manual local analysis
 
 The local-only analysis service is available in History after the explicit schema-v3 upgrade. Select an entry, choose **Analyze**, review each evidence-backed candidate, edit it if needed, then choose which values to apply. A request to `POST /api/entries/{id}/parse` with an empty JSON object creates a retryable attempt for an already saved entry. The service records the fixed model identity, prompt version, entry revision, status, and validated candidate suggestions. It never changes confirmed fields without this separate confirmation step.
@@ -177,3 +191,15 @@ Errors: 400 invalid host/headers; 401 missing/invalid token; 403 rejected browse
 - A database path is mandatory. App creation/import never initializes or migrates a database. The explicit --init-db flag calls the storage module to create/verify a schema; it never migrates or resets data.
 - Existing schema-v1 databases remain incompatible and need a separately approved migration. Schema v2 from Day 3 is unchanged.
 - No AI service, remote server, external UI assets, or automatic data uploads are used by the API.
+
+## Privacy verification
+
+`evals/test_privacy.py` is an offline regression check for the loopback-only Vite proxy, absence of browser token storage and external UI URLs, cloud-disabled Ollama environment, and ignored private artifacts. It complements the authenticated API tests, which cover rejected origins, invalid tokens, duplicate headers, JSON-only writes, and responses that omit sensitive input.
+
+Before a shared release, repeat this short manual check on the normal Mac rather than relying on a managed development environment:
+
+1. Disconnect external network access, start Health-bee with a disposable database, and save/search/edit a synthetic note.
+2. With the local model running, run the synthetic evaluator above. Journaling and History must remain usable when Ollama is stopped.
+3. In the browser Network panel, confirm requests use only the same-origin `/api` proxy and that no request includes a bearer token in its URL.
+4. Inspect listeners with `lsof -nP -iTCP -sTCP:LISTEN`; Health-bee and Ollama should bind only to `127.0.0.1` for their configured ports.
+5. Review Ollama and browser update settings before making a strict no-outbound claim. The app disables Ollama cloud and proxy variables for the process it starts, but it cannot control another application's update policy.

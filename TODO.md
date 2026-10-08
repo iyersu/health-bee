@@ -115,18 +115,20 @@ Menstrual Cycle Insights has four sections: Cycle Timeline, Cycle Phase, Symptom
 
 ### Day 14 — AI evaluation gate
 
-- [ ] Run the fixtures against the installed local model separately from offline CI tests.
-- [ ] Record field accuracy, unsupported suggestions, invalid-output rate, and latency; inspect every failure.
-- [ ] Block AI release for lost inputs or overwritten corrections; keep low-quality extraction disabled until improved.
+- [x] Add a separate synthetic-fixture evaluator for the installed fixed local model; it keeps fixture text and responses out of its report.
+- [ ] Run the fixtures against the installed local model separately from offline CI tests. (The local Ollama service was unavailable in the managed environment on 2026-10-08.)
+- [x] Record field/value accuracy, unexpected suggestions, invalid-output rate, latency, and each failed fixture in an owner-only report.
+- [x] Require manual release review and treat invalid, missing, or unexpected fixture results as blockers; existing parsing tests cover preserved raw text and confirmed corrections.
 - Done when: results and limitations are documented and useful behavior has been demonstrated on this Mac.
 
 ## Milestone 3 — personal use and sharing
 
 ### Day 15 — privacy verification
 
-- [ ] Inspect browser requests and process network activity; test ordinary use with external network access blocked.
-- [ ] Check model/cloud restrictions, bundled assets, update behavior, logs, browser persistence, and unauthorized API requests.
-- [ ] Expand ignore patterns for WAL/SHM files, backups, exports, dependencies, and builds.
+- [x] Add offline privacy regression checks for browser token persistence, external UI URLs, loopback proxy configuration, cloud-disabled Ollama settings, and private artifact ignores.
+- [ ] Inspect browser requests and process network activity; test ordinary use with external network access blocked on the normal Mac.
+- [ ] Review Ollama/browser update behavior on the normal Mac before making a strict no-outbound claim.
+- [x] Expand ignore patterns for WAL/SHM files, backups, exports, local evaluation reports, dependencies, and builds.
 - Done when: capture, history, and installed-model inference work offline, with no journal content in logs or external requests.
 
 ### Day 16 — export and deletion
@@ -240,3 +242,4 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 | Day 11 — 2026-10-06 | Added a manual, bounded local parsing service with separate parse-attempt records and an explicit schema-v3 upgrade | Synthetic success, unavailable service, malformed JSON, timeout, stale-result, migration, and authenticated endpoint checks passed; confirmed entry fields are unchanged | Day 12: review AI suggestions |
 | Day 12 — 2026-10-08 | Added History analysis controls, evidence-backed editable candidates, and explicit confirm/reject actions | Offline tests verify user confirmation, rejection preservation, and authenticated request handling | Day 13: weekly review |
 | Day 13 — 2026-10-08 | Added a local date-range Review with SQL counts, missing-date coverage, bounded source links, and optional deterministic summaries | 84 offline tests and production TypeScript/Vite build passed; summaries have no diagnosis, treatment, causal, or fertility claims | Day 14: AI evaluation gate |
+| Day 14–15 groundwork — 2026-10-08 | Added a synthetic local-model evaluator, owner-only reports, privacy regression checks, and safer ignore patterns | Evaluator and privacy unit tests pass; the managed environment could not reach the Mac's Ollama service, so a normal-Mac synthetic run and live network inspection remain required | Run evaluation and privacy checklist on the normal Mac |
