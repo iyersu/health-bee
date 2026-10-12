@@ -119,7 +119,8 @@ Menstrual Cycle Insights has four sections: Cycle Timeline, Cycle Phase, Symptom
 - [x] Run the fixtures against the installed local model separately from offline CI tests. The 2026-10-08 `suggestions-v1` baseline was 36.36% field/value accuracy, 5 unexpected suggestions, 2 invalid outputs, 434.14 ms mean latency, and 8 failed fixtures.
 - [x] Record field/value accuracy, unexpected suggestions, invalid-output rate, latency, and each failed fixture. The baseline is not useful enough to release.
 - [x] Require manual release review and treat invalid, missing, or unexpected fixture results as blockers; existing parsing tests cover preserved raw text and confirmed corrections.
-- [ ] Re-run the synthetic evaluation after prompt changes; do not enable or share extraction unless the failure review shows useful, safe behavior.
+- [x] Reject the `suggestions-v2` prompt experiment: accuracy fell to 27.27% and invalid output rose to 33.33%. Restore the v1 baseline while investigating errors.
+- [ ] Inspect v1 failures with safe evaluator diagnostics; do not enable or share extraction unless the failure review shows useful, safe behavior.
 - Done when: results and limitations are documented and useful behavior has been demonstrated on this Mac.
 
 ## Milestone 3 — personal use and sharing
@@ -245,3 +246,4 @@ These are later work sessions, not a commitment to enable predictions after 25 c
 | Day 13 — 2026-10-08 | Added a local date-range Review with SQL counts, missing-date coverage, bounded source links, and optional deterministic summaries | 84 offline tests and production TypeScript/Vite build passed; summaries have no diagnosis, treatment, causal, or fertility claims | Day 14: AI evaluation gate |
 | Day 14–15 groundwork — 2026-10-08 | Added a synthetic local-model evaluator, owner-only reports, privacy regression checks, and safer ignore patterns | Evaluator and privacy unit tests pass; the managed environment could not reach the Mac's Ollama service, so a normal-Mac synthetic run and live network inspection remain required | Run evaluation and privacy checklist on the normal Mac |
 | Day 14 baseline — 2026-10-08 | Ran Qwen3 4B against all 15 synthetic extraction fixtures on the Mac | `suggestions-v1`: 36.36% field/value accuracy, 5 unexpected suggestions, 2 invalid outputs, 434.14 ms mean latency; 8 fixtures failed. Extraction is blocked from release while prompt changes are evaluated. | Re-run `suggestions-v2` synthetic evaluation |
+| Day 14 prompt experiment — 2026-10-08 | Tested explicit examples in `suggestions-v2` | Accuracy fell to 27.27%; invalid outputs rose to 33.33%; 8 fixtures still failed. The experiment was reverted, and evaluation now identifies validation reasons and suggestion field names without retaining text. | Inspect the v1 failure details |

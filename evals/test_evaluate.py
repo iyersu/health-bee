@@ -43,6 +43,7 @@ class EvaluateTests(unittest.TestCase):
         self.assertEqual(report["metrics"]["invalid_output_count"], 2)
         self.assertEqual(report["metrics"]["invalid_output_rate"], 1.0)
         self.assertEqual([case["status"] for case in report["cases"]], ["invalid_output", "invalid_output"])
+        self.assertEqual(report["cases"][0]["validation_error"], "Suggestion response must be valid JSON.")
 
     def test_report_is_owner_only_and_does_not_overwrite(self):
         target = Path(self.temp.name) / "report.json"

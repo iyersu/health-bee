@@ -54,6 +54,8 @@ def _summary_case(fixture, actual, elapsed_ms):
         "matched_candidates": matched,
         "missing_candidates": missing,
         "unexpected_candidates": unexpected,
+        "expected_fields": sorted({candidate["field"] for candidate in fixture["expected"]}),
+        "received_fields": sorted({candidate["field"] for candidate in actual}),
         "latency_ms": elapsed_ms,
     }
 
@@ -75,11 +77,13 @@ def evaluate_fixtures(fixture_path=FIXTURES, *, responder=None, clock_ns=None):
         try:
             response = responder(parse._prompt(fixture["raw_text"]), timeout=EVALUATION_TIMEOUT_SECONDS)
             actual = extraction.decode_and_validate_suggestions(fixture["raw_text"], response)
-        except extraction.ExtractionContractError:
+        except extraction.ExtractionContractError as error:
             cases.append({"fixture": fixture["name"], "status": "invalid_output",
                           "expected_candidates": len(fixture["expected"]), "received_candidates": 0,
                           "matched_candidates": 0, "missing_candidates": len(fixture["expected"]),
                           "unexpected_candidates": 0,
+                          "expected_fields": sorted({candidate["field"] for candidate in fixture["expected"]}),
+                          "received_fields": [], "validation_error": str(error),
                           "latency_ms": round((clock_ns() - started) / 1_000_000, 2)})
             continue
         cases.append(_summary_case(fixture, actual, round((clock_ns() - started) / 1_000_000, 2)))
