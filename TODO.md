@@ -135,9 +135,9 @@ Menstrual Cycle Insights has four sections: Cycle Timeline, Cycle Phase, Symptom
 
 ### Day 16 — export and deletion
 
-- [ ] Add explicit local JSON/CSV export and entry deletion with confirmation.
-- [ ] Explain export sensitivity and that old backups retain old entries; test against synthetic data.
-- [ ] Ensure deletion invalidates related suggestions and cached summaries.
+- [x] Add explicit local JSON/CSV export and entry deletion with confirmation.
+- [x] Explain export sensitivity and that old backups retain old entries; test against synthetic data.
+- [x] Ensure deletion invalidates related suggestions and cached summaries.
 - Done when: exported data round-trips and deletion has clearly documented limits.
 
 ### Day 17 — everyday Mac launch

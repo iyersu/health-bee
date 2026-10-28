@@ -446,6 +446,16 @@ class StoreTests(unittest.TestCase):
                 self.assertEqual(result, before)
                 self.assertEqual(get_entry(self.path, entry_id)["observations"][0]["symptom"], "after")
 
+    def test_export_round_trips_and_delete_cascades(self):
+        entry_id = self.add(text="private note", observations=[{"symptom": "cramp"}])
+        payload = json.loads(store.export_entries(self.path, format="json"))
+        self.assertEqual(payload["entries"][0]["raw_text"], "private note")
+        csv_text = store.export_entries(self.path, format="csv")
+        self.assertIn("raw_text", csv_text)
+        store.delete_entry(self.path, entry_id)
+        self.assertIsNone(get_entry(self.path, entry_id))
+        self.assertEqual(store.verify_database(self.path), {"entries": 0, "observations": 0})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -239,6 +239,18 @@ class ApiTests(unittest.TestCase):
         with TestClient(create_app(self.db, "b" * 43), base_url="http://127.0.0.1:8000") as other:
             self.assertEqual(other.get("/api/entries", headers=AUTH).status_code, 401)
 
+    def test_export_and_explicit_delete(self):
+        entry_id = self.create(raw_text="export me").json()["id"]
+        exported = self.client.get("/api/export?format=json", headers=AUTH)
+        self.assertEqual(exported.status_code, 200)
+        self.assertEqual(exported.json()["entries"][0]["raw_text"], "export me")
+        self.assertEqual(self.client.request("DELETE", f"/api/entries/{entry_id}", headers=AUTH,
+                                             json={}).status_code, 422)
+        deleted = self.client.request("DELETE", f"/api/entries/{entry_id}", headers=AUTH,
+                                      json={"confirm": True})
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(self.client.get(f"/api/entries/{entry_id}", headers=AUTH).status_code, 404)
+
     def test_factory_does_not_create_database(self):
         missing = Path(self.temp.name) / "missing.db"
         with TestClient(create_app(missing, TOKEN), base_url="http://127.0.0.1:8000") as client:

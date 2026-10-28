@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 import math
 import json
+import csv
+import io
 import secrets
 import sqlite3
 from typing import Optional, Union
@@ -581,6 +583,38 @@ def get_entries(
     with _connect(path, readonly=True) as connection:
         _check_schema(connection)
         return [_entry_dict(connection, row) for row in connection.execute(query, values).fetchall()]
+
+
+def export_entries(path: DatabasePath, *, format: str = "json") -> str:
+    """Return a local export of all entries, including user observations."""
+    if format not in ("json", "csv"):
+        raise ValueError("format must be json or csv.")
+    entries = get_entries(path)
+    if format == "json":
+        return json.dumps({"schema_version": SCHEMA_VERSION, "entries": entries},
+                          ensure_ascii=False, indent=2) + "\n"
+    fields = ["id", "occurred_at", "occurrence_date", "created_at", "updated_at",
+              "raw_text", "mood", "meds", "food", "tags", "sleep_hours", "energy",
+              "bleeding", "revision", "parsed", "observations"]
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(output, fieldnames=fields, extrasaction="ignore")
+    writer.writeheader()
+    for entry in entries:
+        row = dict(entry)
+        row["observations"] = json.dumps(row.get("observations", []), ensure_ascii=False)
+        writer.writerow(row)
+    return output.getvalue()
+
+
+def delete_entry(path: DatabasePath, entry_id: int) -> None:
+    """Permanently delete one entry and its cascaded local analysis records."""
+    if type(entry_id) is not int or entry_id <= 0:
+        raise ValueError("entry_id must be a positive integer.")
+    with _connect(path) as connection:
+        _check_schema(connection)
+        cursor = connection.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
+        if cursor.rowcount != 1:
+            raise EntryNotFoundError("Entry not found.")
 
 
 def verify_database(path: DatabasePath) -> dict:

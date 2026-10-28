@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import Body, FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from journal import model, parse, review, store
 
@@ -257,6 +257,14 @@ def create_app(db_path, token, *, port=8000):
     def search_entries(payload: dict = Body(...)):
         return store.get_entries(db_path, **_search_fields(payload))
 
+    @app.get("/api/export")
+    def export_entries(format: str = "json"):
+        if format not in ("json", "csv"):
+            raise HTTPException(422, "format must be json or csv.")
+        media_type = "application/json" if format == "json" else "text/csv"
+        return Response(store.export_entries(db_path, format=format), media_type=media_type,
+                        headers={"Content-Disposition": f"attachment; filename=health-bee.{format}"})
+
     @app.get("/api/entries/{entry_id}")
     def read_entry(entry_id: int):
         if not 1 <= entry_id <= 2**63 - 1:
@@ -275,6 +283,15 @@ def create_app(db_path, token, *, port=8000):
         if expected_revision is not None and (type(expected_revision) is not int or expected_revision <= 0):
             raise HTTPException(422, "revision must be a positive integer.")
         return store.update_entry(db_path, entry_id, expected_revision=expected_revision, **fields)
+
+    @app.delete("/api/entries/{entry_id}")
+    def delete_entry(entry_id: int, payload: dict = Body(...)):
+        if not 1 <= entry_id <= 2**63 - 1:
+            raise HTTPException(422, "entry_id is outside its valid range.")
+        if payload != {"confirm": True}:
+            raise HTTPException(422, "Deletion requires an explicit confirm value.")
+        store.delete_entry(db_path, entry_id)
+        return {"deleted": entry_id}
 
     @app.post("/api/entries/{entry_id}/parse")
     def parse_saved_entry(entry_id: int, payload: dict = Body(...)):
