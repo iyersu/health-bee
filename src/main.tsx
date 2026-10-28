@@ -11,8 +11,13 @@ type ParseAttempt = { id: number; status: string; suggestions: Suggestion[] | nu
 type ReviewStatement = { text: string; source_ids: number[] };
 type ReviewData = { entries: number; logged_days: number; missing_dates: string[]; average_sleep_hours: number | null; average_energy: number | null; moods: { value: string; count: number }[]; flows: { value: string; count: number }[]; symptoms: { value: string; count: number }[]; summary: ReviewStatement[]; source_entries: { id: number; occurrence_date: string }[]; source_links_truncated: boolean };
 
+let sessionToken: string | null = null;
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(path, { ...init, headers: { "Content-Type": "application/json", ...(init.headers ?? {}) } });
+  if (!sessionToken && path !== "/api/session") {
+    const session = await fetch("/api/session").then(response => response.json() as Promise<{ token: string }>);
+    sessionToken = session.token;
+  }
+  const response = await fetch(path, { ...init, headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}), ...(init.headers ?? {}) } });
   if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.detail || "The local journal is unavailable."); }
   return response.json() as Promise<T>;
 }

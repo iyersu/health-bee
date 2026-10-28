@@ -142,8 +142,8 @@ Menstrual Cycle Insights has four sections: Cycle Timeline, Cycle Phase, Symptom
 
 ### Day 17 — everyday Mac launch
 
-- [ ] Build UI assets; serve them from the backend so daily use needs no Vite server.
-- [ ] Add a launcher, useful startup errors, clean shutdown, and an optional launchd setup.
+- [x] Build UI assets; serve them from the backend so daily use needs no Vite server.
+- [x] Add a launcher, useful startup errors, clean shutdown, and an optional launchd setup.
 - [ ] Before distribution, configure a per-user application-support data directory and update AGENTS.md accordingly; never move an existing database without approval and backup.
 - Done when: the app opens from one launcher and restart preserves records.
 

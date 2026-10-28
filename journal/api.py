@@ -73,7 +73,7 @@ class LocalAccess:
         if header(b"sec-fetch-site") not in ("", "same-origin", "none"):
             await reject(403, "Cross-origin request not allowed.")
             return
-        if not (scope["path"] == "/api/health" and scope["method"] == "GET"):
+        if not (scope["path"] in ("/api/health", "/api/session") and scope["method"] == "GET"):
             supplied = values.get(b"authorization", [b""])[0]
             if not hmac.compare_digest(supplied, self.expected_auth):
                 await reject(401, "A valid local session token is required.")
@@ -192,7 +192,7 @@ def _review_fields(payload):
     return payload
 
 
-def create_app(db_path, token, *, port=8000):
+def create_app(db_path, token, *, port=8000, static_dir=None):
     """Build an app with explicit local configuration; never initialize the DB.
 
     token is a random URL-safe secret supplied by the launcher. It is never
@@ -235,6 +235,10 @@ def create_app(db_path, token, *, port=8000):
     @app.get("/api/health")
     def health():
         return {"status": "ok"}
+
+    @app.get("/api/session")
+    def session():
+        return {"token": token}
 
     @app.get("/api/model/status")
     def local_model_status():
@@ -313,5 +317,12 @@ def create_app(db_path, token, *, port=8000):
     @app.post("/api/review")
     def weekly_review(payload: dict = Body(...)):
         return review.build_review(db_path, **_review_fields(payload))
+
+    if static_dir is not None:
+        from fastapi.staticfiles import StaticFiles
+        static_path = Path(static_dir).expanduser().resolve()
+        if not (static_path / "index.html").is_file():
+            raise ValueError("Built UI is missing; run npm run build first.")
+        app.mount("/", StaticFiles(directory=static_path, html=True), name="ui")
 
     return app

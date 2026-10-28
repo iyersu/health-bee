@@ -21,6 +21,7 @@ def main(argv=None):
     parser.add_argument("--session-file", type=Path,
                         help="Owner-only file for a local launcher; must not exist")
     parser.add_argument("--init-db", action="store_true", help="Create/verify schema without migration")
+    parser.add_argument("--static-dir", type=Path, help="Serve a built UI directory from this API")
     args = parser.parse_args(argv)
     if not 1024 <= args.port <= 65535:
         parser.error("port must be between 1024 and 65535")
@@ -32,7 +33,7 @@ def main(argv=None):
     elif not args.db.is_file():
         parser.error("database missing; use --init-db to create a new database")
     token = secrets.token_urlsafe(32)
-    app = create_app(args.db, token, port=args.port)
+    app = create_app(args.db, token, port=args.port, static_dir=args.static_dir)
     with ExitStack() as stack:
         if args.session_file is None:
             directory = stack.enter_context(tempfile.TemporaryDirectory(prefix="health-bee-session-"))
